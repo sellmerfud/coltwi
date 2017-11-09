@@ -1,0 +1,20 @@
+
+scmDisplay  = '${TM_SCM_BRANCH:+ ☛ $TM_SCM_NAME: ${TM_SCM_BRANCH}}'
+relativeDir = '${TM_DIRECTORY/^.*\/projects\/fallingsky\/?(.+)?/${1:?$1:.}/}'
+windowTitle = '$TM_DISPLAYNAME – $relativeDir $scmDisplay'
+
+excludeFilesInBrowser       = "{$excludeFilesInBrowser,*.class,*.jar}"
+excludeDirectoriesInBrowser = "{$excludeDirectoriesInBrowser,classes,lib}"
+excludeInFileChooser        = "{$excludeInFileChooser,classes,lib,help,robo-help,scaladoc,*.jar}"
+excludeInFolderSearch       = "{$excludeInFolderSearch,classes,lib,log,scaladoc,help,robo-help,*.jar}" 
+
+showWrapColumn = true
+wrapColumn     = 100
+softWrap       = false
+
+[ src/main/scala/** ]
+fileType  = 'source.scala'
+
+[ source.scala,source.java ]
+tabSize         = 2
+softTabs        = true
