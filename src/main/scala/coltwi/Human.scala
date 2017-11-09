@@ -98,6 +98,7 @@ object Human {
       }
     }
     
+    // Ask the user in which space(s) to pacify
     override def afterSpaces(completedSpaces: Set[String], params: Params): Unit = {
     //   val mapSpaces = completedSpaces - FranceTrackName - BorderZoneTrackName
     //   val candidateSpaces = mapSpaces filter (!game.getSpace(_).isOppose)
@@ -232,10 +233,6 @@ object Human {
         case "special" =>
           executeSpecialActivity(op, params)
           nextChoice()
-          
-        // case "remove" =>
-        //   voluntaryRemoval(faction)
-        //   nextChoice()
           
         case "abort" =>
           if (askYorN("Really abort? (y/n) ")) throw AbortAction

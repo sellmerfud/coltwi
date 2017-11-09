@@ -1576,8 +1576,14 @@ object ColonialTwilight {
       val action = if (deck.isGovPivotalCard(game.currentCard.get))
         Event
       else {
+        val isFree = Set[Action](Event, Pass)
+        val actions = if (game.resources(Gov) < 2) 
+          game.sequence.availableActions filter isFree.apply
+        else
+          game.sequence.availableActions
+          
         println("\nChoose one:")
-        askMenu(game.sequence.availableActions map (a => a -> a.toString)).head
+        askMenu(actions map (a => a -> a.toString)).head
       }
       
       log(s"\nGovernment chooses: $action")
@@ -1652,8 +1658,12 @@ object ColonialTwilight {
       doPivot(Fln)
     else {
       val (role, desc) = game.sequence.numActed match {
-        case 0 => (game.sequence.firstEligible, s"${game.sequence.firstEligible} is up (1st eligible)")
-        case 1 => (game.sequence.secondEligible, s"${game.sequence.secondEligible} is up (2nd eligible)")
+        case 0 =>
+          val role = game.sequence.firstEligible
+          (role, s"${role} is up (1st eligible, ${game.resources(role)} resources)")
+        case 1 =>
+          val role = game.sequence.secondEligible
+          (role, s"${role} is up (2nd eligible, ${game.resources(role)} resources)")
         case _ => throw new IllegalStateException("resolveEventCard() two actions already completed")
       }
     
