@@ -100,30 +100,41 @@ object Human {
     
     // Ask the user in which space(s) to pacify
     override def afterSpaces(completedSpaces: Set[String], params: Params): Unit = {
-    //   val mapSpaces = completedSpaces - FranceTrackName - BorderZoneTrackName
-    //   val candidateSpaces = mapSpaces filter (!game.getSpace(_).isOppose)
-    //   if (candidateSpaces.nonEmpty) {
-    //     val twoOK = candidateSpaces.size > 1 && game.capabilityInPlay(CapGovSaS)
-    //     val choices = List(
-    //       choice(true,  1, "Pacify in one of the selected spaces"),
-    //       choice(twoOK, 2, "Pacify in one of the selected spaces"),
-    //       choice(true,  0, "Do not pacify in a selected space")
-    //     ).flatten
-    //     println("\nChoose one:")
-    //     val num = askMenu(choices).head
-    //
-    //     def nextPacification(numLeft: Int, candidates: List[String]): Unit = {
-    //       if (numLeft > 0) {
-    //         val name = askCandidate("Choose space: ", candidates)
-    //         pacifySpace(name, 1)
-    //         val sp = game.getSpace(name)
-    //
-    //       }
-    //     }
-    //     nextPacification(num, candidateSpaces.toList.sorted)
-    //   }
-    }
+      val mapSpaces = completedSpaces - FranceTrackName - BorderZoneTrackName
+      val candidateSpaces = mapSpaces filter (!game.getSpace(_).isSupport)
+      val maxSpaces = if (capabilityInPlay(CapGovSaS)) 2 else 1
     
+      def nextPacify(completed: Int, candidates: Set[String]): Unit = {
+        val prompt = if (completed == 0) "Do you wish to pacify in one of the training spaces? (y/n) "
+                     else "Do you wish to pacify in a second training space? (y/n) "
+        if (completed < maxSpaces && candidates.nonEmpty && game.resources(Gov) > 1 && askYorN(prompt)) {
+          val name = askCandidate("Choose space to pacify: ", candidates.toList.sorted, allowAbort = false)
+          val sp = game.getSpace(name)
+          val maxInSpace = sp.terror + 1
+          val maxPossible = maxInSpace min (game.resources(Gov) / 2)
+          val choices = List.range(maxPossible, -1, -1) map {
+            case 0                    => (0 -> "Do not pacify in this space")
+            case 1 if sp.terror == 0  => (1 -> "Shift one level toward support")
+            case n if n == maxInSpace => (n -> "Remove all terror markers and shift one level toward support")
+            case n                    => (n -> s"Remove ${amountOf(n, "terror marker")}")
+          }
+          println("\nChoose one:")
+          val num = askMenu(choices, allowAbort = false).head
+          if (num == 0)
+            nextPacify(completed, candidates)
+          else {
+            decreaseResources(Gov, num * 2)
+            if (sp.terror > 0)
+              removeTerror(name, if (num == maxInSpace) num-1 else num)
+            if (num == maxInSpace)
+              increaseSupport(name, 1)
+            nextPacify(completed+1, candidates - name)
+          }
+        }
+      }
+      
+      nextPacify(0, candidateSpaces)
+    } 
   }
   
   object Garrison extends GovOp {

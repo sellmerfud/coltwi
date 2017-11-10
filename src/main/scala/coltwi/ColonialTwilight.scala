@@ -458,6 +458,12 @@ object ColonialTwilight {
     def hasTerror = terror > 0
     def isResettled = hasMarker(ResettledMarker)
     
+    def addMarker(m: String, num: Int = 1): Space = copy(markers = m :: markers)
+    def removeMarker(m: String, num: Int = 1): Space = {
+      val (matched, other) = markers.partition(_ == m)
+      copy(markers = matched.drop(num) ::: other)
+    }
+    
     // As per the Errata, border sectors do not come into play until
     // Morocco and Tunisia become independent.
     def isBorderSector = (game.pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent)) &&
@@ -940,6 +946,45 @@ object ColonialTwilight {
     log(s"Decrease the Border zone track ${amountOf(num, "space")} to '${game.borderZoneTrack}'")
   }
   
+  def addTerror(name: String, num: Int): Unit = {
+    val sp = game.getSpace(name)
+    assert(game.terrorMarkersAvailable >= num, "addTerror: not enough available markers")
+    game = game.updateSpace(sp.addMarker(TerrorMarker, num))
+    log(s"Add ${amountOf(num, "terror marker")} to $name")
+  }
+  
+  def removeTerror(name: String, num: Int): Unit = {
+    val sp = game.getSpace(name)
+    assert(sp.terror >= num, "removeTerror: not enought markers in space")
+    game = game.updateSpace(sp.removeMarker(TerrorMarker, num))
+    log(s"Remove ${amountOf(num, "terror marker")} from $name")
+  }
+  
+  def increaseSupport(name: String, num: Int): Unit = {
+    val sp = game.getSpace(name)
+    val newLevel = (sp.support, num) match {
+      case (Neutral, 1) => Support
+      case (Oppose,  1) => Neutral
+      case (Oppose,  2) => Support
+      case (s, n)       => throw new IllegalStateException(s"Cannot increase support from $s by $n steps")
+    }
+    val updated = sp.copy(support = newLevel)
+    logSupportChange(sp, updated)
+    game = game.updateSpace(updated)
+  }
+  
+  def decreaseSupport(name: String, num: Int): Unit = {
+    val sp = game.getSpace(name)
+    val newLevel = (sp.support, num) match {
+      case (Neutral, 1) => Oppose
+      case (Support, 1) => Neutral
+      case (Support, 2) => Oppose
+      case (s, n)       => throw new IllegalStateException(s"Cannot decrease support from $s by $n steps")
+    }
+    val updated = sp.copy(support = newLevel)
+    logSupportChange(sp, updated)
+    game = game.updateSpace(updated)
+  }
   
   // Place pieces from the AVAILABLE box in the given map space.
   // There must be enough pieces in the available box or an exception is thrown.
@@ -975,6 +1020,19 @@ object ColonialTwilight {
         log(s"Flip the control marker to ${updated.control} in ${orig.name}")
     }
   }
+  
+  def logSupportChange(orig: Space, updated: Space): Unit = {
+    assert(orig.name == updated.name, "logSupportChange: not the same space!")
+    if (orig.support != updated.support) {
+      if (updated.support == Neutral)
+        log(s"Remove the ${orig.support} marker from ${orig.name}")
+      else if (orig.support == Neutral)
+        log(s"Place ${updated.support} marker in ${orig.name}")
+      else
+        log(s"Flip the support marker to ${updated.support} in ${orig.name}")
+    }
+  }
+
   
   // If num is 1 use the name as is
   // otherwise either use the plural if given or add an 's' to the name.
@@ -1159,12 +1217,12 @@ object ColonialTwilight {
     }
   }
   
-  def askCandidate(prompt: String, candidates: List[String]): String = {
+  def askCandidate(prompt: String, candidates: List[String], allowAbort: Boolean = true): String = {
     assert(candidates.nonEmpty, s"askCandidate(): list of candidates cannot be empty")
     // If only one candidate then don't bother to ask
     candidates match {
       case x :: Nil => println(s"$prompt $x"); x
-      case xs       => askOneOf(prompt, xs, allowAbort = true).get
+      case xs       => askOneOf(prompt, xs, allowAbort = allowAbort).get
     }
   }
   
