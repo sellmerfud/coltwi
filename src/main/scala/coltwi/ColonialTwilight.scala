@@ -1645,7 +1645,11 @@ object ColonialTwilight {
       }
       
       log(s"\nGovernment chooses: $action")
-      val finalAction = Human.executeAction(action)
+      val executedAction = Human.executeAction(action)
+      // For the first eligible role, we adjust the action base on what they
+      // actually did.  This affects eligibiliy for the following turn.
+      val finalAction = if (game.sequence.numActed == 0) executedAction else action
+      
       log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box")
       game = game.copy(sequence = game.sequence.nextAction(finalAction))
     }
