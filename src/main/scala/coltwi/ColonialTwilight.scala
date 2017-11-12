@@ -172,7 +172,7 @@ object ColonialTwilight {
   
   
   // Sorts alphabetically, but puts France track and Border zone track at the front.
- val SpaceNameOrdering = new Ordering[String] {
+ val TrainingSpaceOrdering = new Ordering[String] {
     def compare(x: String, y: String) = (x, y) match {
       case (FranceTrackName, _)     => -1
       case (_, FranceTrackName)     => 1
@@ -307,15 +307,6 @@ object ColonialTwilight {
     val total           = totalGov         + totalFln
     
     def stringItems = AllPieceTypes filter (numOf(_) > 0) map (t => amtPiece(numOf(t), t))
-    // def stringItems = List(
-    //   if (frenchTroops > 0)     Some(frenchT(frenchTroops)) else None,
-    //   if (frenchPolice > 0)     Some(frenchP(frenchPolice)) else None,
-    //   if (algerianTroops > 0)   Some(algerianT(algerianTroops)) else None,
-    //   if (algerianPolice > 0)   Some(algerianP(algerianPolice)) else None,
-    //   if (hiddenGuerrillas > 0) Some(hiddenG(hiddenGuerrillas)) else None,
-    //   if (activeGuerrillas > 0) Some(activeG(activeGuerrillas)) else None,
-    //   if (govBases > 0)         Some(govB(govBases)) else None,
-    //   if (flnBases > 0)         Some(flnB(flnBases)) else None).flatten
     
     override def toString() = if (total == 0) "none" else stringItems.mkString(", ")
     
@@ -331,6 +322,9 @@ object ColonialTwilight {
     }
     
     def totalOf(pieceTypes: Seq[PieceType]) = pieceTypes.foldLeft(0) { (num, piece) => num + numOf(piece) }
+    
+    // Return true of this Pieces instance contains at least all of the other pieces.
+    def contains(other: Pieces): Boolean = AllPieceTypes forall (t => numOf(t) >= other.numOf(t))
     
     def set(num: Int, pieceType: PieceType): Pieces = pieceType match {
       case FrenchTroops     => copy(frenchTroops     = num)
@@ -623,7 +617,7 @@ object ColonialTwilight {
   case object ExecOpOnly         extends Action    { override def toString() = "Execute Op Only" }
   
   val secondActions: Map[Action, List[Action]] = Map(
-    Pass               -> List(Event, ExecOpPlusActivity, ExecLimitedOp, ExecOpOnly, Pass),
+    Pass               -> List(Event, ExecOpPlusActivity, ExecOpOnly, ExecLimitedOp, Pass),
     Event              -> List(ExecOpPlusActivity, Pass),
     ExecOpPlusActivity -> List(Event, ExecLimitedOp, Pass),
     ExecLimitedOp      -> List(ExecOpPlusActivity, ExecOpOnly, Pass),
@@ -642,7 +636,7 @@ object ColonialTwilight {
       assert(secondAction.isEmpty, "availableActions called after two actions taken")
       firstAction match {
         case Some(first) => secondActions(first)
-        case None        => List(Event, ExecOpPlusActivity, ExecLimitedOp, ExecOpOnly, Pass)
+        case None        => List(Event, ExecOpPlusActivity, ExecOpOnly, ExecLimitedOp, Pass)
       }
     }
       
@@ -1359,6 +1353,20 @@ object ColonialTwilight {
     }
   }
 
+  // Move the given pieces from the source space to the destination space
+  // and log the activity.
+  def movePieces(pieces: Pieces, source: String, dest: String): Unit = {
+    val srcSpace = game.getSpace(source)
+    val dstSpace = game.getSpace(dest)
+    assert(srcSpace.pieces contains pieces, s"$source does not contain all requested pieces: $pieces")
+    
+    val updatedSrc = srcSpace.copy(pieces = srcSpace.pieces - pieces)
+    val updatedDst = dstSpace.copy(pieces = dstSpace.pieces + pieces)
+    game = game.updateSpace(updatedSrc).updateSpace(updatedDst)
+    log(s"\nMove the following pieces from $source to $dest:")
+    wrap("    ", pieces.stringItems) foreach (log(_))
+  }
+  
   def inspect[T](name: String, value: T): T = {
     println(s"DEBUG: $name == ${value.toString}")
     value
@@ -2205,14 +2213,13 @@ object ColonialTwilight {
   
   def adjustResettled(name: String): Unit = {
     val sp = game.getSpace(name)
-    val resettled = sp.hasMarker(ResettledMarker)
-    if (!resettled && game.resttledMarkersAvailable == 0) {
+    if (!sp.isResettled && game.resttledMarkersAvailable == 0) {
       println(s"All resettled markers are already on the map.")
       pause()
     }
     else {
-      val newValue = !resettled
-      logAdjustment(name, "Resettled", resettled, newValue)
+      val newValue = !sp.isResettled
+      logAdjustment(name, "Resettled", sp.isResettled, newValue)
       if (newValue)
         game = game.updateSpace(sp.copy(markers = ResettledMarker :: sp.markers))
       else

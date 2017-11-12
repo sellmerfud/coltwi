@@ -38,12 +38,21 @@ import ColonialTwilight._
 
 
 object Human {
-  // These variables are used throughout a single execution only.
-  private var includeSpecialActivity  = false
-  private var specialActivityComplete = false
-  
-  def canDoSpecialActivity = includeSpecialActivity && !specialActivityComplete
-  
+
+    
+  object specialActivity {
+    private var alllowSpecialActivity = false
+    private var specialActivityTaken  = false
+    
+    def init(allow: Boolean): Unit = {
+      alllowSpecialActivity = allow
+      specialActivityTaken  = false
+    }
+    def allowed = alllowSpecialActivity && !specialActivityTaken
+    def completed(): Unit = specialActivityTaken = true
+    def taken = specialActivityTaken
+  }
+    
   case class Params(
     includeSpecialActivity: Boolean = false,
     maxSpaces: Option[Int]          = None,
@@ -53,28 +62,18 @@ object Human {
   )
   
   sealed trait GovOp {
-    val specialActivites: List[GovSpecial]
-    def spaceFilter(sp: Space): Boolean
-    def validSpaces(params: Params): Set[String] = {
+    def validSpaces(params: Params)(spaceFilter: (Space) => Boolean): Set[String] = {
       val names = spaceNames(game.spaces filter spaceFilter).toSet
       params.onlyIn map (only => names intersect only) getOrElse names
     }
-    def performIn(spaceName: String, params: Params): Unit
-    def afterSpaces(completedSpaces: Set[String], params: Params): Unit = ()
-    
+    def execute(params: Params): Int   // Return the number of spaces acted upon
   }
   
   object Train extends GovOp {
     override def toString() = "Train"
-    val specialActivites = List(Deploy, TroopLift)
-    
-    override def spaceFilter(sp: Space): Boolean = if (game.pivotalCardsPlayed(PivotalRecallDeGaulle))
-        sp.isCity || sp.hasGovBase || (sp.isGovControlled && sp.pieces.totalTroops > 0 && sp.pieces.totalPolice > 0)
-      else
-        sp.isCity || sp.hasGovBase
     
     // Override the default so we can add the France Track and Border Zone Track
-    override def validSpaces(params: Params): Set[String] = {
+   override def validSpaces(params: Params)(spaceFilter: (Space) => Boolean): Set[String] = {
       val ft  = if (game.franceTrack > 0)
         Set(FranceTrackName)
       else
@@ -85,21 +84,94 @@ object Human {
       else
         Set.empty
       
-      ft ++ bzt ++ super.validSpaces(params)
+      ft ++ bzt ++ super.validSpaces(params)(spaceFilter)
     }
     
-    override def performIn(spaceName: String, params: Params): Unit = {
-      spaceName match {
-        case FranceTrackName     => decreaseFranceTrack(1)
-        case BorderZoneTrackName => increaseBorderZoneTrack(1)
-        case _ =>
-          val toPlace = askPiecesToPlace(spaceName, List(AlgerianTroops, AlgerianPolice), maxToPlace = 4)
-          placePieces(spaceName, toPlace)
+    override def execute(params: Params): Int = {
+      val spaceFilter = (sp: Space) => {
+        if (game.pivotalCardsPlayed(PivotalRecallDeGaulle))
+          sp.isCity || sp.hasGovBase || (sp.isGovControlled && sp.pieces.totalTroops > 0 && sp.pieces.totalPolice > 0)
+        else
+          sp.isCity || sp.hasGovBase
+      }
+        
+      var completedSpaces = Set.empty[String]
+      specialActivity.init(params.includeSpecialActivity)
+    
+      def nextChoice(): Unit = {
+        val candidateSpaces = params.maxSpaces match {
+          case Some(m) if completedSpaces.size >= m => Set.empty
+          case _  => validSpaces(params)(spaceFilter) -- completedSpaces
+        }
+        
+        val choices = List(
+          choice(candidateSpaces.nonEmpty,  "space",    s"Select a space to train"),
+          choice(specialActivity.allowed,   "special",  s"Perform a special activity"),
+          choice(true,                      "done",     s"Finished selecting spaces"),
+          choice(true,                      "abort",    s"Abort the entire $Gov turn")
+        ).flatten
+      
+        println("\n")
+        println(s"$Gov Train operation")
+        println(separator(char = '='))
+        wrap("spaces completed: ", completedSpaces.toList.sorted(TrainingSpaceOrdering)) foreach println
+        println(s"\nChoose one (${amtRes(Gov)} remaining):")
+        askMenu(choices, allowAbort = false).head match {
+          case "space" =>
+            askCandidateAllowNone(s"\nChoose space to Train: ", candidateSpaces.toList.sorted(TrainingSpaceOrdering)) foreach { spaceName =>
+              if (trainInSpace(spaceName, params))
+                completedSpaces += spaceName
+            }
+            nextChoice()
+          
+          case "special" =>
+            executeSpecialActivity(Deploy::TroopLift::Nil, params)
+            nextChoice()
+          
+          case "abort" =>
+            if (askYorN("Really abort? (y/n) ")) throw AbortAction
+            nextChoice()
+          
+          case "done" =>
+            pacifySpaces(completedSpaces, params)
+        }
+      }
+    
+      nextChoice()
+      completedSpaces.size  // Return number of training spaces selected
+    }
+    
+    def trainInSpace(spaceName: String, params: Params): Boolean = {
+      val savedState = game
+      try {
+        log()
+        log(s"$Gov executes Train operation: $spaceName")
+        if (!params.free) {
+          log()
+          decreaseResources(Gov, 2)
+        }
+        
+        spaceName match {
+          case FranceTrackName     => decreaseFranceTrack(1)
+          case BorderZoneTrackName => increaseBorderZoneTrack(1)
+          case _ =>
+            val toPlace = askPiecesToPlace(spaceName, List(AlgerianTroops, AlgerianPolice), maxToPlace = 4)
+            placePieces(spaceName, toPlace)
+        }
+        true
+      }
+      catch {
+        case AbortAction =>
+          println(s"\n>>>> Aborting Train operation in $spaceName <<<<")
+          println(separator())
+          displayGameStateDifferences(game, savedState)
+          game = savedState
+          false
       }
     }
-    
+        
     // Ask the user in which space(s) to pacify
-    override def afterSpaces(completedSpaces: Set[String], params: Params): Unit = {
+   def pacifySpaces(completedSpaces: Set[String], params: Params): Unit = {
       val mapSpaces = completedSpaces - FranceTrackName - BorderZoneTrackName
       val candidateSpaces = mapSpaces filter (!game.getSpace(_).isSupport)
       val maxSpaces = if (capabilityInPlay(CapGovSaS)) 2 else 1
@@ -139,29 +211,107 @@ object Human {
   
   object Garrison extends GovOp {
     override def toString() = "Garrison"
-    val specialActivites = List(TroopLift, Neutralize)
+    override def execute(params: Params): Int = {
+      var movedPolice: Map[String, Pieces] = Map.empty.withDefaultValue(Pieces())
+      def totalMoved = movedPolice.foldLeft(0) { case (sum, (_, p)) => sum + p.totalPolice }
+      // Return the number of police cubes in the space that have not already been moved
+      def availablePolice(sp: Space) = sp.pieces.totalPolice - movedPolice(sp.name).totalPolice
+      val destFilter     = (sp: Space) => { sp.isResettled || sp.population > 0 }
+      val sourceFilter   = (sp: Space) => { destFilter(sp) && availablePolice(sp) > 0 }
+      val destCandidates = validSpaces(params)(destFilter)
+      specialActivity.init(params.includeSpecialActivity)
+      log()
+      log(s"$Gov executes Garrison operation")
+      if (!params.free) {
+        log()
+        decreaseResources(Gov, 2)
+      }
+      
+      def nextChoice(): Unit = {
+        val sourceCandidates = validSpaces(params)(sourceFilter)
+        val choices = List(
+          choice(totalMoved < 6 && sourceCandidates.nonEmpty, "police",   s"Select a police cube to move"),
+          choice(specialActivity.allowed,                     "special",  s"Perform a special activity"),
+          choice(true,                                        "done",     s"Finished selecting police cubes"),
+          choice(true,                                        "abort",    s"Abort the entire $Gov turn")
+        ).flatten
+      
+        println("\n")
+        println(s"$Gov Garrison operation")
+        println(separator(char = '='))
+        val moved = movedPolice.toList.sortBy(_._1) map { case (n, p) => s"$n (${p.toString})"}
+        wrap("police moved: ", moved) foreach println
+        println(s"\nChoose one:")
+        askMenu(choices, allowAbort = false).head match {
+          case "police" =>
+            val savedState = game
+            try {
+              askCandidateAllowNone(s"\nChoose space with police cube: ", sourceCandidates.toList.sorted) foreach { source =>
+                val sp   = game.getSpace(source)
+                val p    = askPieces(sp.pieces - movedPolice(source), 1, FrenchPolice::AlgerianPolice::Nil)
+                val dest = if (params.maxSpaces == Some(1) && movedPolice.nonEmpty)
+                  movedPolice.toList.head._1
+                else
+                  askCandidate(s"Choose destination space: ", destCandidates.toList.sorted)
+                movePieces(p, source, dest)
+                movedPolice += dest -> (movedPolice(dest) + p)
+              }
+            }
+            catch {
+              case AbortAction =>
+                println(s"\n>>>> Aborting police cube movement <<<<")
+                println(separator())
+                displayGameStateDifferences(game, savedState)
+                game = savedState
+            }
+            nextChoice()
+          
+          case "special" =>
+            executeSpecialActivity(TroopLift::Neutralize::Nil, params)
+            nextChoice()
+          
+          case "abort" =>
+            if (askYorN("Really abort? (y/n) ")) throw AbortAction
+            nextChoice()
+          
+          case "done" =>
+            activateGuerrillas(params)
+        }
+      }
     
-    override def spaceFilter(sp: Space): Boolean = true
-    override def validSpaces(params: Params): Set[String] = Set.empty
-    override def performIn(spaceName: String, params: Params): Unit = ()
+      nextChoice()
+      movedPolice.size  // Return number of garrison destination spaces
+    }
+    
+    // Activate guerrillas. Can be any space with hidden guerrillas where
+    // there are enough police cubes.  
+    def activateGuerrillas(params: Params): Unit = {
+      val canActivate = (sp: Space) => {
+        sp.pieces.hiddenGuerrillas > 0 &&
+        ((sp.isMountains && sp.pieces.totalPolice > 1) || (!sp.isMountains && sp.pieces.totalPolice > 0))
+      }
+      val candidates = spaceNames(game.spaces filter canActivate)
+      if (candidates.isEmpty)
+        println(s"\nThere are no spaces where hidden guerrillas can be activated by police cubes")
+      else {
+        val name = askCandidate(s"Choose space to activate guerrillas: ", candidates.sorted, allowAbort = false)
+        val sp = game.getSpace(name)
+        val num = if (sp.isMountains) sp.pieces.totalPolice / 2 else sp.pieces.totalPolice
+        activateHiddenGuerrillas(name, num min sp.pieces.hiddenGuerrillas)
+      }
+    }
   }
   
   object Sweep extends GovOp {
     override def toString() = "Sweep"
     val specialActivites = List(TroopLift, Neutralize)
-    
-    override def spaceFilter(sp: Space): Boolean = true
-    override def validSpaces(params: Params): Set[String] = Set.empty
-    override def performIn(spaceName: String, params: Params): Unit = ()
+    override def execute(params: Params): Int = 0
   }
   
   object Assault extends GovOp {
     override def toString() = "Assault"
     val specialActivites = List(TroopLift)
-    
-    override def spaceFilter(sp: Space): Boolean = true
-    override def validSpaces(params: Params): Set[String] = Set.empty
-    override def performIn(spaceName: String, params: Params): Unit = ()
+    override def execute(params: Params): Int = 0
   }
   
   sealed trait GovSpecial
@@ -180,117 +330,40 @@ object Human {
     askMenu(choices).head
   }
   
-  def askSpecial(op: GovOp): GovSpecial = {
-    val choices = op.specialActivites map (s => s -> s.toString)
-    println("\nChoose special ability:")
-    askMenu(choices).head
-  }
-  
-  
   // Top level entry point to human actions
   def executeAction(action: Action): Action = action match {
     case Pass               => performPass(Gov); Pass
     case ExecOpPlusActivity => 
       val num = executeOp(Params(includeSpecialActivity = true))
-      if (specialActivityComplete) ExecOpPlusActivity else if (num < 2) ExecLimitedOp else ExecOpOnly
+      if (specialActivity.taken) ExecOpPlusActivity else if (num < 2) ExecLimitedOp else ExecOpOnly
     case ExecOpOnly         => if (executeOp() < 2) ExecLimitedOp else ExecOpOnly
     case ExecLimitedOp      => executeOp(Params(maxSpaces = Some(1))); ExecLimitedOp
     case Event              => executeEvent(); Event
   }
   
+  // Ask user to select an operation and execute it.
   // Return the number of spaces acted upon
   def executeOp(params: Params = Params()): Int =  {
-    includeSpecialActivity  = params.includeSpecialActivity
-    specialActivityComplete = false
-    
     val op = askOp()
-    var completedSpaces = Set.empty[String]
-
-    def nextChoice(): Unit = {
-      val candidateSpaces = params.maxSpaces match {
-        case Some(m) if completedSpaces.size >= m => Set.empty
-        case _  => op.validSpaces(params) -- completedSpaces
-      }
-      // TODO:  
-      // The choices should be slightly different for Garrison since it may involve police
-      // cubes from anywhere on the map.  The user first selects up to 6 police cubes.
-      // Then select 1 or more destination spaces for those police cubes.
-      // Finally, he selects 1 space to reveal underground guerrillas
-      val choices = List(
-        choice(candidateSpaces.nonEmpty,  "space",   s"Select a space and perform a $op operation there"),
-        choice(canDoSpecialActivity,      "special",  s"Perform a special activity"),
-          // Voluntary removal ONLY IF piece is not available
-        // choice(true,                      "remove",   "Voluntarily remove pieces from the map"),
-        choice(true,                      "done",     s"Finished selecting spaces"),
-        choice(true,                      "abort",    s"Abort the entire $Gov turn")
-      ).flatten
-      
-      println("\n")
-      println(s"$Gov $op")
-      println(separator(char = '='))
-      // wrap("spaces available: ", candidateSpaces.toList.sorted) foreach println
-      wrap("spaces completed: ", completedSpaces.toList.sorted(SpaceNameOrdering)) foreach println
-      println(s"\nChoose one (${amtRes(Gov)} remaining):")
-      askMenu(choices, allowAbort = false).head match {
-        case "space" =>
-          askCandidateAllowNone(s"\nChoose space to $op: ", candidateSpaces.toList.sorted(SpaceNameOrdering)) foreach { spaceName =>
-            log()
-            log(s"$Gov executes $op operation: $spaceName")
-            if (performOpInSpace(spaceName, op, params))
-              completedSpaces += spaceName
-          }
-          nextChoice()
-          
-        case "special" =>
-          executeSpecialActivity(op, params)
-          nextChoice()
-          
-        case "abort" =>
-          if (askYorN("Really abort? (y/n) ")) throw AbortAction
-          nextChoice()
-          
-        case "done" =>
-      }
-    }
-    
-    // Garrison is paid once for the entire operation.
-    if (op == Garrison && !params.free) {
-      log()
-      decreaseResources(Gov, 2)
-    }
-    nextChoice()
-    op.afterSpaces(completedSpaces, params)
-    completedSpaces.size
+    op.execute(params)
   }
     
-  // Returns true if the operation was not aborted.
-  def performOpInSpace(spaceName: String, op: GovOp, params: Params): Boolean = {
-    val savedState = game
-    try {
-      if (op != Garrison && !params.free) {
-        log()
-        decreaseResources(Gov, 2)
-      }
-      op.performIn(spaceName, params)
-      true
-    }
-    catch {
-      case AbortAction =>
-        println(s"\n>>>> Aborting $op in $spaceName <<<<")
-        println(separator())
-        displayGameStateDifferences(game, savedState)
-        game = savedState
-        false
-    }
-  }
-  
   def executeEvent(): Unit = {
     
   }
   
-  def executeSpecialActivity(op: GovOp, params: Params): Unit = {
+  def executeSpecialActivity(allowedActivities: List[GovSpecial], params: Params): Unit = {
+    val activity = allowedActivities match {
+      case a::Nil => a
+      case _ =>
+        println("\nChoose special ability:")
+        askMenu(allowedActivities map (s => s -> s.toString)).head
+    }
+    
+    println(s"Special activity: $activity selected")
+    println("Speical activities NOT YET IMPLEMENTED!!")
     // Ask which ability, then execute it.
-    specialActivityComplete = true
+    specialActivity.completed()
   }
   
   
