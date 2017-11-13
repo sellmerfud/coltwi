@@ -101,7 +101,7 @@ object Human {
     }
     
     override def execute(params: Params): Int = {
-      var completedSpaces = Set.empty[String]
+      var trainSpaces = Set.empty[String]
       val spaceFilter = (sp: Space) => {
         if (game.pivotalCardsPlayed(PivotalRecallDeGaulle))
           sp.isCity || sp.hasGovBase || (sp.isGovControlled && sp.pieces.totalTroops > 0 && sp.pieces.totalPolice > 0)
@@ -110,10 +110,13 @@ object Human {
       }
     
       def nextChoice(): Unit = {
-        val candidateSpaces = params.maxSpaces match {
-          case Some(m) if completedSpaces.size >= m => Set.empty
-          case _  => validSpaces(params)(spaceFilter) -- completedSpaces
-        }
+        val candidateSpaces: Set[String] = if (game.resources(Gov) < 2 && !params.free)
+          Set.empty
+        else
+          params.maxSpaces match {
+            case Some(m) if trainSpaces.size >= m => Set.empty
+            case _  => validSpaces(params)(spaceFilter) -- trainSpaces
+          }
         
         val choices = List(
           choice(candidateSpaces.nonEmpty,  "space",    s"Select a space to train"),
@@ -125,13 +128,13 @@ object Human {
         println("\n")
         println(s"$Gov Train operation")
         println(separator(char = '='))
-        wrap("spaces completed: ", completedSpaces.toList.sorted(TrainingSpaceOrdering)) foreach println
+        wrap("spaces trained: ", trainSpaces.toList.sorted(TrainingSpaceOrdering)) foreach println
         println(s"\nChoose one (${amtRes(Gov)} remaining):")
         askMenu(choices, allowAbort = false).head match {
           case "space" =>
             askCandidateAllowNone(s"\nChoose space to Train: ", candidateSpaces.toList.sorted(TrainingSpaceOrdering)) foreach { spaceName =>
               if (trainInSpace(spaceName, params))
-                completedSpaces += spaceName
+                trainSpaces += spaceName
             }
             nextChoice()
           
@@ -144,12 +147,12 @@ object Human {
             nextChoice()
           
           case "done" =>
-            pacifySpaces(completedSpaces, params)
+            pacifySpaces(trainSpaces, params)
         }
       }
     
       nextChoice()
-      completedSpaces.size  // Return number of training spaces selected
+      trainSpaces.size  // Return number of training spaces selected
     }
     
     def trainInSpace(spaceName: String, params: Params): Boolean = {
@@ -182,8 +185,8 @@ object Human {
     }
         
     // Ask the user in which space(s) to pacify
-   def pacifySpaces(completedSpaces: Set[String], params: Params): Unit = {
-      val mapSpaces = completedSpaces - FranceTrackName - BorderZoneTrackName
+   def pacifySpaces(trainSpaces: Set[String], params: Params): Unit = {
+      val mapSpaces = trainSpaces - FranceTrackName - BorderZoneTrackName
       val candidateSpaces = mapSpaces filter (!game.getSpace(_).isSupport)
       val maxSpaces = if (capabilityInPlay(CapGovSaS)) 2 else 1
     
@@ -326,16 +329,19 @@ object Human {
       val sweepFilter = (sp: Space) => guerrillasActivated(sp) > 0 || sourceSpaces(sp).nonEmpty
       
       def nextChoice(): Unit = {
-        val sweepCandidates = params.maxSpaces match {
-          case Some(m) if sweepSpaces.size >= m => Set.empty
-          case _  => validSpaces(params)(sweepFilter) -- sweepSpaces
-        }
+        val sweepCandidates: Set[String] = if (game.resources(Gov) < 2 && !params.free)
+          Set.empty
+        else 
+          params.maxSpaces match {
+            case Some(m) if sweepSpaces.size >= m => Set.empty
+            case _  => validSpaces(params)(sweepFilter) -- sweepSpaces
+          }
         
         val choices = List(
           choice(sweepCandidates.nonEmpty, "sweep",   s"Select a sweep space"),
-          choice(specialActivity.allowed,              "special",  s"Perform a special activity"),
-          choice(true,                                 "done",     s"Finished selecting sweep spaces"),
-          choice(true,                                 "abort",    s"Abort the entire $Gov turn")
+          choice(specialActivity.allowed,  "special", s"Perform a special activity"),
+          choice(true,                     "done",    s"Finished selecting sweep spaces"),
+          choice(true,                     "abort",   s"Abort the entire $Gov turn")
         ).flatten
       
         println("\n")
@@ -420,8 +426,69 @@ object Human {
   
   object Assault extends GovOp {
     override def toString() = "Assault"
-    val specialActivites = List(TroopLift)
-    override def execute(params: Params): Int = 0
+    override def execute(params: Params): Int = {
+      var assaultSpaces = Set.empty[String]
+      def flnLosses(sp: Space): Pieces = {
+        val totalCubes = if (sp.isCity || sp.isBorderSector) sp.pieces.totalCubes else sp.pieces.totalTroops
+        val maxLosses  = if (sp.isMountains) totalCubes / 2 else totalCubes
+        val numGuerrillas = sp.pieces.activeGuerrillas min maxLosses
+        val numBases = if (sp.pieces.flnBases == 0 || sp.pieces.hiddenGuerrillas > 0 || sp.pieces.activeGuerrillas >= maxLosses)
+          0
+        else
+          (maxLosses - numGuerrillas) min sp.pieces.flnBases
+        Pieces(activeGuerrillas = numGuerrillas, flnBases = numBases)
+      }
+      
+      def nextChoice(): Unit = {
+        val assaultCandidates: Set[String] = if (game.resources(Gov) < 2 && !params.free)
+          Set.empty
+        else 
+          params.maxSpaces match {
+            case Some(m) if assaultSpaces.size >= m => Set.empty
+            case _  => validSpaces(params)(flnLosses(_).total > 0) -- assaultSpaces
+          }
+        
+        val choices = List(
+          choice(assaultCandidates.nonEmpty, "assault", s"Select an assault space"),
+          choice(specialActivity.allowed,    "special", s"Perform a special activity"),
+          choice(true,                       "done",    s"Finished selecting asault spaces"),
+          choice(true,                       "abort",   s"Abort the entire $Gov turn")
+        ).flatten
+      
+        println("\n")
+        println(s"$Gov Assault operation")
+        println(separator(char = '='))
+        wrap("spaces assaulted: ", assaultSpaces.toList.sorted) foreach println
+        println(s"\nChoose one:")
+        askMenu(choices, allowAbort = false).head match {
+          case "assault" =>
+            askCandidateAllowNone(s"\nChoose space to Assault: ", assaultCandidates.toList.sorted) foreach { spaceName =>
+              log()
+              log(s"$Gov executes Assault operation: $spaceName")
+              if (!params.free) {
+                log()
+                decreaseResources(Gov, 2)
+              }
+              removeLosses(spaceName, flnLosses(game.getSpace(spaceName)))
+              assaultSpaces += spaceName
+            }
+            nextChoice()
+          
+          case "special" =>
+            executeSpecialActivity(TroopLift::Nil, params)
+            nextChoice()
+          
+          case "abort" =>
+            if (askYorN("Really abort? (y/n) ")) throw AbortAction
+            nextChoice()
+          
+          case "done" =>
+        }
+      }
+    
+      nextChoice()
+      assaultSpaces.size
+    }
   }
   
   sealed trait GovSpecial

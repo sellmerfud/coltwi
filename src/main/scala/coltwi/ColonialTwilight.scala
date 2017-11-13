@@ -917,6 +917,16 @@ object ColonialTwilight {
     log(s"Decrease ${role} resources by -$amount to ${game.resources(role)}")
   }
   
+  def increaseCommitment(amount: Int): Unit = if (amount > 0) {
+    game = game.copy(commitment = (game.commitment + amount) min EdgeTrackMax)
+    log(s"Increase Government commitment by +$amount to ${game.commitment}")
+  }
+  
+  def decreaseCommitment(amount: Int): Unit = if (amount > 0) {
+    game = game.copy(commitment = (game.commitment - amount) max 0)
+    log(s"Decrease Government commitment by -$amount to ${game.commitment}")
+  }
+  
   def increaseFranceTrack(num: Int = 1): Unit = if (num > 0) {
     game = game.copy(franceTrack = (game.franceTrack + num) min FranceTrackMax)
     val entry = FranceTrack(game.franceTrack)
@@ -1305,7 +1315,7 @@ object ColonialTwilight {
           else {
             val num = askInt(s"\nHow many $pieceType? ", 0, maxOfType)
             if (num > game.availablePieces.numOf(pieceType))
-              removePiecesToAvailable(num - game.availablePieces.numOf(pieceType), pieceType, Set(spaceName))
+              voluntaryRemoval(num - game.availablePieces.numOf(pieceType), pieceType, Set(spaceName))
             nextType(placed.add(num, pieceType), remainingTypes.tail)
           }
         }
@@ -1316,10 +1326,10 @@ object ColonialTwilight {
   }
 
   // Ask the user to remove the given number of pieces of the requested type from the map.
-  def removePiecesToAvailable(num: Int, pieceType: PieceType, prohibitedSpaces: Set[String]): Unit = {
+  def voluntaryRemoval(num: Int, pieceType: PieceType, prohibitedSpaces: Set[String]): Unit = {
     val candidateNames = spaceNames(game.spaces filterNot (sp => prohibitedSpaces(sp.name)) filter (_.pieces.numOf(pieceType) > 0))
     def availPieces(names: List[String]) = names.foldLeft(0)((sum, n) => sum + game.getSpace(n).pieces.numOf(pieceType))
-    assert(availPieces(candidateNames) >= num, "removePiecesToAvailable: Not enough pieces on map!")
+    assert(availPieces(candidateNames) >= num, "voluntaryRemoval: Not enough pieces on map!")
     println(s"\nRemove ${amtPiece(num, pieceType)} from the map.")
     
     def nextSpace(removed: Vector[(String, Int)], candidates: List[String]): Vector[(String, Int)] = {
@@ -1366,6 +1376,53 @@ object ColonialTwilight {
     wrap("    ", pieces.stringItems) foreach (log(_))
   }
   
+  // Remove combat losses from the board to the appropriate box(es)
+  // and log the results.
+  // bases are removed to available
+  // active guerrillas are alternately removed to available and casualties
+  def removeLosses(spaceName: String, losses: Pieces): Unit = {
+    val sp = game.getSpace(spaceName)
+    var pieces = sp.pieces
+    var casualties = game.casualties
+
+    for {
+      pieceType <- List(FrenchTroops, FrenchPolice, AlgerianTroops, AlgerianPolice)
+      num = losses.numOf(pieceType)
+      if num > 0
+    } {
+      log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the casualties box")
+      pieces = pieces.remove(num, pieceType)
+      casualties = casualties.add(num, pieceType)
+    }
+    
+    val gToAvailable  = (losses.numOf(ActiveGuerrillas) + 1) / 2
+    val gtoCasualties = losses.numOf(ActiveGuerrillas) / 2
+    
+    if (gToAvailable > 0)
+      log(s"Remove ${amtPiece(gToAvailable, ActiveGuerrillas)} from $spaceName to the available box")
+        
+    if (gtoCasualties > 0)
+      log(s"Remove ${amtPiece(gtoCasualties, ActiveGuerrillas)} from $spaceName to the casualties box")
+        
+    pieces     = pieces.remove(gToAvailable + gtoCasualties, ActiveGuerrillas)
+    casualties = casualties.add(gtoCasualties, ActiveGuerrillas)
+    
+    for {
+      pieceType <- List(GovBases, FlnBases)
+      num = losses.numOf(pieceType)
+      if num > 0
+    } {
+      log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the available box")
+      pieces = pieces.remove(num, pieceType)
+      if (pieceType == GovBases)
+        decreaseCommitment(1)
+      else
+        increaseCommitment(1)
+    }
+    
+    game = game.copy(casualties = casualties).updateSpace(sp.copy(pieces = pieces))
+  }
+
   def inspect[T](name: String, value: T): T = {
     println(s"DEBUG: $name == ${value.toString}")
     value
