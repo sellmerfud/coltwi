@@ -895,14 +895,13 @@ object ColonialTwilight {
     }
   }
   
-  def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = {
+  def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.pieces.activateGuerrillas(num))
-    
     log(s"Flip ${hiddenG(num)} in $spaceName to active")
   }
   
-  def hideActiveGuerrillas(spaceName: String, num: Int): Unit = {
+  def hideActiveGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.pieces.hideGuerrillas(num))
     log(s"Flip ${activeG(num)} in $spaceName to underground")
@@ -918,43 +917,43 @@ object ColonialTwilight {
     log(s"Decrease ${role} resources by -$amount to ${game.resources(role)}")
   }
   
-  def increaseFranceTrack(num: Int = 1): Unit = {
+  def increaseFranceTrack(num: Int = 1): Unit = if (num > 0) {
     game = game.copy(franceTrack = (game.franceTrack + num) min FranceTrackMax)
     val entry = FranceTrack(game.franceTrack)
     log(s"Shift the France track right ${amountOf(num, "space")} to '${entry.name}'")
   }
   
-  def decreaseFranceTrack(num: Int = 1): Unit = {
+  def decreaseFranceTrack(num: Int = 1): Unit = if (num > 0) {
     game = game.copy(franceTrack = (game.franceTrack - num) max 0)
     val entry = FranceTrack(game.franceTrack)
     log(s"Shift the France track left ${amountOf(num, "space")} to '${entry.name}'")
   }
   
-  def increaseBorderZoneTrack(num: Int = 1): Unit = {
+  def increaseBorderZoneTrack(num: Int = 1): Unit = if (num > 0) {
     game = game.copy(borderZoneTrack = (game.borderZoneTrack + num) min BorderZoneTrackMax)
     log(s"Increase the Border zone track ${amountOf(num, "space")} to '${game.borderZoneTrack}'")
   }
   
-  def decreaseBorderZoneTrack(num: Int = 1): Unit = {
+  def decreaseBorderZoneTrack(num: Int = 1): Unit = if (num > 0) {
     game = game.copy(borderZoneTrack = (game.borderZoneTrack - num) max 0)
     log(s"Decrease the Border zone track ${amountOf(num, "space")} to '${game.borderZoneTrack}'")
   }
   
-  def addTerror(name: String, num: Int): Unit = {
+  def addTerror(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
     assert(game.terrorMarkersAvailable >= num, "addTerror: not enough available markers")
     game = game.updateSpace(sp.addMarker(TerrorMarker, num))
     log(s"Add ${amountOf(num, "terror marker")} to $name")
   }
   
-  def removeTerror(name: String, num: Int): Unit = {
+  def removeTerror(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
     assert(sp.terror >= num, "removeTerror: not enought markers in space")
     game = game.updateSpace(sp.removeMarker(TerrorMarker, num))
     log(s"Remove ${amountOf(num, "terror marker")} from $name")
   }
   
-  def increaseSupport(name: String, num: Int): Unit = {
+  def increaseSupport(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
     val newLevel = (sp.support, num) match {
       case (Neutral, 1) => Support
@@ -967,7 +966,7 @@ object ColonialTwilight {
     game = game.updateSpace(updated)
   }
   
-  def decreaseSupport(name: String, num: Int): Unit = {
+  def decreaseSupport(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
     val newLevel = (sp.support, num) match {
       case (Neutral, 1) => Oppose
@@ -982,7 +981,7 @@ object ColonialTwilight {
   
   // Place pieces from the AVAILABLE box in the given map space.
   // There must be enough pieces in the available box or an exception is thrown.
-  def placePieces(spaceName: String, toPlace: Pieces): Unit = {
+  def placePieces(spaceName: String, toPlace: Pieces): Unit = if (toPlace.total > 0) {
     assert(
       game.availablePieces.frenchTroops     >= toPlace.frenchTroops &&
       game.availablePieces.frenchPolice     >= toPlace.frenchPolice &&
