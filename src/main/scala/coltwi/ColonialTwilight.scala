@@ -971,6 +971,16 @@ object ColonialTwilight {
     log(s"Remove ${amountOf(num, "terror marker")} from $name")
   }
   
+  def addResettledMarker(name: String): Unit = {
+    val sp = game.getSpace(name)
+    assert(game.resttledMarkersAvailable > 0, "addResettledMarker: no resettled markers available")
+    val updated = sp.addMarker(ResettledMarker).copy(support = Neutral)
+    game = game.updateSpace(updated)
+    log(s"Add Resettled marker to $name")
+    logSupportChange(sp, updated)
+  }
+  
+  
   def increaseSupport(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
     val newLevel = (sp.support, num) match {

@@ -491,7 +491,7 @@ object Human {
   }
   
   sealed trait GovSpecial {
-    def execute(params: Params): Unit
+    def execute(params: Params): Boolean
   }
   
   object Deploy extends GovSpecial {
@@ -507,7 +507,7 @@ object Human {
     def getResettleCandidates = spaceNames(game.algerianSpaces filter resettleFilter).toSet
     
     // Move pieces or resettle
-    override def execute(params: Params): Unit = {
+    override def execute(params: Params): Boolean = {
       val canMove = {
         val candidates = getMoveCandidates
         candidates.nonEmpty && availPieces.total > 0 && {
@@ -525,9 +525,9 @@ object Human {
       ).flatten
       println("\nChoose one:")
       askMenu(choices).head match {
-        case "move"     => moveFrenchPieces(params)
-        case "resettle" => resettleSpace(params)
-        case _          =>
+        case "move"     => moveFrenchPieces(params); true
+        case "resettle" => resettleSpace(params); true
+        case _          => false
       }
     }
     
@@ -591,31 +591,32 @@ object Human {
     // Resettle - Choose one space and place a resettled marker there
     //            Remove any support/opposition
     def resettleSpace(params: Params): Unit = {
-      
+      addResettledMarker(askCandidate("Resettle which space? ", getResettleCandidates.toList.sorted))
     }
   }
   
   object TroopLift extends GovSpecial { 
     override def toString() = "Troop Lift"
-    override def execute(params: Params): Unit = {
+    override def execute(params: Params): Boolean = {
       val numSpaces = 3 +
         (if (momentumInPlay(MoBananes))               2 else 0) +
         (if (momentumInPlay(MoVentilos))              1 else 0) +
         (if (momentumInPlay(MoCrossBorderAirStrike)) -1 else 0) +
         (if (momentumInPlay(MoStrategicMovement))    -1 else 0)
-          
+      true  
     }
   }
   
   object Neutralize extends GovSpecial { 
     override def toString() = "Neutralize"
-    override def execute(params: Params): Unit = {
+    override def execute(params: Params): Boolean = {
       // if (capabilityInPlay(CapTorture))
       //   -1 commitment for executing Neutralize special activity
       //   In each space, remove one extra piece which may be underground (bases last)
       
       // if (capabilityInPlay(CapOverkill))
       //   Remove up to 4 pieces total (still only two spaces max)
+      true
     }
   }
   
@@ -648,8 +649,8 @@ object Human {
     
     val savedState = game
     try {
-      activity.execute(params)
-      specialActivity.completed()
+      if (activity.execute(params))
+        specialActivity.completed()
     }
     catch {
       case AbortAction =>
