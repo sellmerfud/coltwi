@@ -245,27 +245,29 @@ object ColonialTwilight {
     CapRevenge, CapOverkill, CapScorch, CapNapalm, CapTaleb, CapAmateurBomber, CapXWilayaCoord,
     CapDeadZone, CapFlnSaS, CapGovSaS, CapFlnCommandos, CapGovCommandos, CapOAS, CapTorture)
     
-    
-  val MoBalkyConscripts   = "FLN: Balky Conscripts"
-  val MoPeaceOfTheBrave   = "Gov: Peace Of The Brave"
-  val MoMoudjahidine      = "FLN: Moudjahidine"
-  val MoBananes           = "Gov: Bananes"
-  val MoVentilos          = "Gov: Ventilos"
-  val MoTheCallUp         = "FLN: The Call Up"
-  val MoIntimidation      = "Gov: Intimidation"
-  val MoStrategicMovement = "FLN: Strategic Movement"
-  val MoParanoia          = "Gov: Paranoia"
-  val MoChallePlanGov     = "Gov: Challe Plan"
-  val MoChallePlanFln     = "FLN: Challe Plan"
-  val MoMoghazni          = "Gov: Moghazni"
-  val MoPopulationControl = "Gov: Population Control"
-  val MoHardendAttitudes  = "Dual: Hardend Attitudes"
-  val MoPeaceTalks        = "Dual: Peace Talks"
+  
+  // Momentum markers  
+  val MoBalkyConscripts      = "FLN: Balky Conscripts"
+  val MoPeaceOfTheBrave      = "Gov: Peace Of The Brave"
+  val MoCrossBorderAirStrike = "FLN: Cross-border air strike"
+  val MoMoudjahidine         = "FLN: Moudjahidine"
+  val MoBananes              = "Gov: Bananes"
+  val MoVentilos             = "Gov: Ventilos"
+  val MoTheCallUp            = "FLN: The Call Up"
+  val MoIntimidation         = "Gov: Intimidation"
+  val MoStrategicMovement    = "FLN: Strategic Movement"
+  val MoParanoia             = "Gov: Paranoia"
+  val MoChallePlanGov        = "Gov: Challe Plan"
+  val MoChallePlanFln        = "FLN: Challe Plan"
+  val MoMoghazni             = "Gov: Moghazni"
+  val MoPopulationControl    = "Gov: Population Control"
+  val MoHardendAttitudes     = "Dual: Hardend Attitudes"
+  val MoPeaceTalks           = "Dual: Peace Talks"
 
   val AllMomentum = List(
-    MoBalkyConscripts, MoPeaceOfTheBrave, MoMoudjahidine, MoBananes, MoVentilos, MoTheCallUp,
-    MoIntimidation, MoStrategicMovement, MoParanoia, MoChallePlanGov, MoChallePlanFln, MoMoghazni,
-    MoPopulationControl, MoHardendAttitudes, MoPeaceTalks)
+    MoBalkyConscripts, MoPeaceOfTheBrave, MoCrossBorderAirStrike, MoMoudjahidine, MoBananes,
+    MoVentilos, MoTheCallUp, MoIntimidation, MoStrategicMovement, MoParanoia, MoChallePlanGov,
+    MoChallePlanFln, MoMoghazni, MoPopulationControl, MoHardendAttitudes, MoPeaceTalks)
   
   sealed trait PieceType {
     val singular: String
@@ -358,6 +360,9 @@ object ColonialTwilight {
       case GovBases         => copy(govBases         = (govBases - num) max 0)
       case FlnBases         => copy(flnBases         = (flnBases - num) max 0)
     }
+    
+    def only(pieceTypes: Seq[PieceType]): Pieces = 
+      pieceTypes.foldLeft(Pieces()) { (pieces, t) => pieces.add(numOf(t), t) }
     
     def + (added: Pieces): Pieces = Pieces(
       frenchTroops     = frenchTroops     + added.frenchTroops,
@@ -887,6 +892,8 @@ object ColonialTwilight {
   
   def capabilityInPlay(cap: String) = game.capabilities contains cap
   
+  def momentumInPlay(mo: String) = game.momentum contains mo
+  
   def placeGuerrillas(spaceName: String, num: Int): Unit = {
     if (num > 0) {
       assert(game.guerrillasAvailable >= num, s"placeGuerrillas($spaceName, $num): not enought available guerrillas")
@@ -988,28 +995,6 @@ object ColonialTwilight {
     val updated = sp.copy(support = newLevel)
     logSupportChange(sp, updated)
     game = game.updateSpace(updated)
-  }
-  
-  // Place pieces from the AVAILABLE box in the given map space.
-  // There must be enough pieces in the available box or an exception is thrown.
-  def placePieces(spaceName: String, toPlace: Pieces): Unit = if (toPlace.total > 0) {
-    assert(
-      game.availablePieces.frenchTroops     >= toPlace.frenchTroops &&
-      game.availablePieces.frenchPolice     >= toPlace.frenchPolice &&
-      game.availablePieces.algerianTroops   >= toPlace.algerianTroops &&
-      game.availablePieces.algerianPolice   >= toPlace.algerianPolice &&
-      game.availablePieces.hiddenGuerrillas >= toPlace.hiddenGuerrillas &&
-      game.availablePieces.activeGuerrillas >= toPlace.activeGuerrillas &&
-      game.availablePieces.govBases         >= toPlace.govBases &&
-      game.availablePieces.flnBases         >= toPlace.flnBases,
-      "Insufficent pieces in the available box"
-    )
-    
-    val sp = game.getSpace(spaceName)
-    val updated = sp.copy(pieces = sp.pieces + toPlace)
-    game = game.updateSpace(updated)
-    log(s"\nPlace ${toPlace} from the available box into $spaceName")
-    logControlChange(sp, updated)
   }
   
   
@@ -1156,7 +1141,7 @@ object ColonialTwilight {
       val choices = (low to high).toList
       default match {
         case Some(d) =>
-          val p = if (choices.size > 6)
+          val p = if (choices.size > 3)
             "%s (%d - %d) Default = %d: ".format(prompt, choices.head, choices.last, d)
           else
             "%s (%s) Default = %d: ".format(prompt, orList(choices), d)
@@ -1165,7 +1150,7 @@ object ColonialTwilight {
             case Some(x) => x
           }
         case None => 
-          val p = if (choices.size > 6)
+          val p = if (choices.size > 3)
             "%s (%d - %d): ".format(prompt, choices.head, choices.last)
           else
             "%s (%s): ".format(prompt, orList(choices))
@@ -1243,7 +1228,7 @@ object ColonialTwilight {
   // Ask the user to select a number of pieces. 
   // The type of pieces allowed for selection may be limited by passing a list of those
   // that are allowed.  An empty list indicates that all types of pieces may be selected.
-  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType], allowAbort: Boolean = true): Pieces = {
+  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType] = Nil, allowAbort: Boolean = true): Pieces = {
     val pieceTypes = (if (allowed.nonEmpty) allowed else AllPieceTypes) filter (pieces.numOf(_) > 0)
     var selected   = Pieces()
     val numPieces  = num min pieces.totalOf(pieceTypes)
@@ -1363,6 +1348,39 @@ object ColonialTwilight {
     }
   }
 
+  // Place pieces from the AVAILABLE box in the given map space.
+  // There must be enough pieces in the available box or an exception is thrown.
+  def placePieces(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
+    assert(
+      game.availablePieces.frenchTroops     >= pieces.frenchTroops &&
+      game.availablePieces.frenchPolice     >= pieces.frenchPolice &&
+      game.availablePieces.algerianTroops   >= pieces.algerianTroops &&
+      game.availablePieces.algerianPolice   >= pieces.algerianPolice &&
+      game.availablePieces.hiddenGuerrillas >= pieces.hiddenGuerrillas &&
+      game.availablePieces.activeGuerrillas >= pieces.activeGuerrillas &&
+      game.availablePieces.govBases         >= pieces.govBases &&
+      game.availablePieces.flnBases         >= pieces.flnBases,
+      "Insufficent pieces in the available box"
+    )
+    
+    val sp = game.getSpace(spaceName)
+    val updated = sp.copy(pieces = sp.pieces + pieces)
+    game = game.updateSpace(updated)
+    log(s"\nPlace the following pieces from the available box into $spaceName:")
+    wrap("  ", pieces.stringItems) foreach (log(_))
+    logControlChange(sp, updated)
+  }
+  
+  def removeToAvailableFrom(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
+    val sp = game.getSpace(spaceName)
+    assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
+    val updated = sp.copy(pieces = sp.pieces - pieces)
+    game = game.updateSpace(updated)
+    log(s"\nMove the following pieces from $spaceName to the available box:")
+    wrap("  ", pieces.stringItems) foreach (log(_))
+    logControlChange(sp, updated)
+  }
+
   // Move the given pieces from the source space to the destination space
   // and log the activity.
   def movePieces(pieces: Pieces, source: String, dest: String): Unit = {
@@ -1374,7 +1392,9 @@ object ColonialTwilight {
     val updatedDst = dstSpace.copy(pieces = dstSpace.pieces + pieces)
     game = game.updateSpace(updatedSrc).updateSpace(updatedDst)
     log(s"\nMove the following pieces from $source to $dest:")
-    wrap("    ", pieces.stringItems) foreach (log(_))
+    wrap("  ", pieces.stringItems) foreach (log(_))
+    logControlChange(srcSpace, updatedSrc)
+    logControlChange(dstSpace, updatedDst)
   }
   
   // Remove combat losses from the board to the appropriate box(es)
