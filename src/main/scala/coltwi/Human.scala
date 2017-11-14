@@ -38,7 +38,6 @@ import ColonialTwilight._
 
 
 object Human {
-
   case class Params(
     includeSpecialActivity: Boolean = false,
     maxSpaces: Option[Int]          = None,
@@ -76,7 +75,7 @@ object Human {
     
   sealed trait GovOp {
     def validSpaces(params: Params)(spaceFilter: (Space) => Boolean): Set[String] = {
-      val names = spaceNames(game.spaces filter spaceFilter).toSet
+      val names = spaceNames(game.algerianSpaces filter spaceFilter).toSet
       params.onlyIn map (only => names intersect only) getOrElse names
     }
     def execute(params: Params): Int   // Return the number of spaces acted upon
@@ -302,7 +301,7 @@ object Human {
         (sp.pieces.totalPolice / 2) min sp.pieces.hiddenGuerrillas
       else
         sp.pieces.totalPolice min sp.pieces.hiddenGuerrillas
-      val candidates = spaceNames(game.spaces filter (guerrillasActivated(_) > 0))
+      val candidates = spaceNames(game.algerianSpaces filter (guerrillasActivated(_) > 0))
       if (candidates.isEmpty)
         println(s"\nThere are no spaces where hidden guerrillas can be activated by police cubes")
       else {
@@ -491,20 +490,29 @@ object Human {
     }
   }
   
-  sealed trait GovSpecial
-  object Deploy     extends GovSpecial { override def toString() = "Deploy"}
-  object TroopLift  extends GovSpecial { override def toString() = "Troop Lift"}
-  object Neutralize extends GovSpecial { override def toString() = "Neutralize"}
+  sealed trait GovSpecial {
+    def execute(params: Params): Unit
+  }
   
+  object Deploy extends GovSpecial {
+    override def toString() = "Deploy"
+    override def execute(params: Params): Unit = {
+      
+    }
+  }
   
-  def askOp(): GovOp = {
-    val choices = List(
-      Train    -> Train.toString,
-      Garrison -> Garrison.toString,
-      Sweep    -> Sweep.toString,
-      Assault  -> Assault.toString)
-    println("\nChoose Op:")
-    askMenu(choices).head
+  object TroopLift extends GovSpecial { 
+    override def toString() = "Troop Lift"
+    override def execute(params: Params): Unit = {
+      
+    }
+  }
+  
+  object Neutralize extends GovSpecial { 
+    override def toString() = "Neutralize"
+    override def execute(params: Params): Unit = {
+      
+    }
   }
   
   // Top level entry point to human actions
@@ -521,28 +529,35 @@ object Human {
   // Ask user to select an operation and execute it.
   // Return the number of spaces acted upon
   def executeOp(params: Params = Params()): Int =  {
-    val op = askOp()
+    val choices = List(Train,Garrison,Sweep,Assault) map (o => o -> o.toString)
+    println("\nChoose Operation:")
+    val op = askMenu(choices).head
+    
     specialActivity.init(params.includeSpecialActivity)
     movingGroups.reset()
     op.execute(params)
   }
     
-  def executeEvent(): Unit = {
+  def executeSpecialActivity(allowedActivities: List[GovSpecial], params: Params): Unit = {
+    println("\nChoose special ability:")
+    val activity = askMenu(allowedActivities map (s => s -> s.toString)).head
     
+    val savedState = game
+    try {
+      activity.execute(params)
+      specialActivity.completed()
+    }
+    catch {
+      case AbortAction =>
+        println(s"\n>>>> Aborting $activity special activity <<<<")
+        println(separator())
+        displayGameStateDifferences(game, savedState)
+        game = savedState
+    }
   }
   
-  def executeSpecialActivity(allowedActivities: List[GovSpecial], params: Params): Unit = {
-    val activity = allowedActivities match {
-      case a::Nil => a
-      case _ =>
-        println("\nChoose special ability:")
-        askMenu(allowedActivities map (s => s -> s.toString)).head
-    }
+  def executeEvent(): Unit = {
     
-    println(s"Special activity: $activity selected")
-    println("Speical activities NOT YET IMPLEMENTED!!")
-    // Ask which ability, then execute it.
-    specialActivity.completed()
   }
   
   

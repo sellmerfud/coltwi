@@ -696,6 +696,7 @@ object ColonialTwilight {
     coupdEtatPlayedOnce: Boolean = false,
     history: Vector[String]      = Vector.empty) {
     
+    val algerianSpaces = spaces filterNot (_.isCountry)
     
     val franceTrackLetter = ('A' + franceTrack).toChar
 
@@ -1415,9 +1416,9 @@ object ColonialTwilight {
       log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the available box")
       pieces = pieces.remove(num, pieceType)
       if (pieceType == GovBases)
-        decreaseCommitment(1)
+        decreaseCommitment(num)
       else
-        increaseCommitment(1)
+        increaseCommitment(num)
     }
     
     game = game.copy(casualties = casualties).updateSpace(sp.copy(pieces = pieces))
