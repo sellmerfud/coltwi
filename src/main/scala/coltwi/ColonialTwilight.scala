@@ -1410,49 +1410,77 @@ object ColonialTwilight {
   // Remove combat losses from the board to the appropriate box(es)
   // and log the results.
   // bases are removed to available
-  // active guerrillas are alternately removed to available and casualties
-  def removeLosses(spaceName: String, losses: Pieces): Unit = {
-    val sp = game.getSpace(spaceName)
-    var pieces = sp.pieces
-    var casualties = game.casualties
+  // guerrillas are alternately removed to available and casualties
+  // hidden guerrillas may be taken as losses in some cases (capabilities, etc.)
 
-    for {
-      pieceType <- List(FrenchTroops, FrenchPolice, AlgerianTroops, AlgerianPolice)
-      num = losses.numOf(pieceType)
-      if num > 0
-    } {
-      log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the casualties box")
-      pieces = pieces.remove(num, pieceType)
-      casualties = casualties.add(num, pieceType)
-    }
+  def removeLosses(spaceName: String, lostPieces: Pieces): Unit = removeLosses(Seq(spaceName -> lostPieces))
+  
+  def removeLosses(losses: Seq[(String, Pieces)]): Unit = {
+    val totalGuerrillasLost = losses.foldLeft(0) { case (sum, (_, p)) => sum + p.totalGuerrillas }
+    var gToAvailable = (totalGuerrillasLost + 1) / 2
+    var gToCasualties = totalGuerrillasLost / 2
+    var casualties = game.casualties
     
-    val gToAvailable  = (losses.numOf(ActiveGuerrillas) + 1) / 2
-    val gtoCasualties = losses.numOf(ActiveGuerrillas) / 2
+    for ((spaceName, lostPieces) <- losses) {
+      log(s"\nLosses for $spaceName:")
+      wrap("  ", lostPieces.stringItems) foreach (log(_))
+      val sp = game.getSpace(spaceName)
+      var pieces = sp.pieces
+      for {
+        pieceType <- List(FrenchTroops, FrenchPolice, AlgerianTroops, AlgerianPolice)
+        num = lostPieces.numOf(pieceType)
+        if num > 0
+      } {
+        log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the casualties box")
+        pieces = pieces.remove(num, pieceType)
+        casualties = casualties.add(num, pieceType)
+      }
     
-    if (gToAvailable > 0)
-      log(s"Remove ${amtPiece(gToAvailable, ActiveGuerrillas)} from $spaceName to the available box")
+      val activeToAvailable  = gToAvailable min lostPieces.activeGuerrillas
+      gToAvailable -= activeToAvailable
+      val hiddenToAvailable  = gToAvailable min lostPieces.hiddenGuerrillas
+      gToAvailable -= hiddenToAvailable
+      val activeToCasualties = gToCasualties min (lostPieces.activeGuerrillas - activeToAvailable)
+      gToCasualties -= activeToCasualties
+      val hiddenToCasualties = gToCasualties min (lostPieces.hiddenGuerrillas - hiddenToAvailable)
+      gToCasualties -= hiddenToCasualties
+      
+      if (activeToAvailable > 0)
+        log(s"Remove ${amtPiece(activeToAvailable, ActiveGuerrillas)} from $spaceName to the available box")
         
-    if (gtoCasualties > 0)
-      log(s"Remove ${amtPiece(gtoCasualties, ActiveGuerrillas)} from $spaceName to the casualties box")
+      if (hiddenToAvailable > 0)
+        log(s"Remove ${amtPiece(hiddenToAvailable, HiddenGuerrillas)} from $spaceName to the available box")
         
-    pieces     = pieces.remove(gToAvailable + gtoCasualties, ActiveGuerrillas)
-    casualties = casualties.add(gtoCasualties, ActiveGuerrillas)
+      if (activeToCasualties > 0)
+        log(s"Remove ${amtPiece(activeToCasualties, ActiveGuerrillas)} from $spaceName to the casualties box")
+        
+      if (hiddenToCasualties > 0)
+        log(s"Remove ${amtPiece(hiddenToCasualties, HiddenGuerrillas)} from $spaceName to the casualties box")
+        
+      pieces = pieces.remove(activeToAvailable + activeToCasualties, ActiveGuerrillas)
+      pieces = pieces.remove(hiddenToAvailable + hiddenToCasualties, HiddenGuerrillas)
+      casualties = casualties.add(activeToCasualties, ActiveGuerrillas)
+      casualties = casualties.add(hiddenToCasualties, HiddenGuerrillas)
     
-    for {
-      pieceType <- List(GovBases, FlnBases)
-      num = losses.numOf(pieceType)
-      if num > 0
-    } {
-      log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the available box")
-      pieces = pieces.remove(num, pieceType)
-      if (pieceType == GovBases)
-        decreaseCommitment(num)
-      else
-        increaseCommitment(num)
+      for {
+        pieceType <- List(GovBases, FlnBases)
+        num = lostPieces.numOf(pieceType)
+        if num > 0
+      } {
+        log(s"Remove ${amtPiece(num, pieceType)} from $spaceName to the available box")
+        pieces = pieces.remove(num, pieceType)
+        if (pieceType == GovBases)
+          decreaseCommitment(num)
+        else
+          increaseCommitment(num)
+      }
+    
+      game = game.updateSpace(sp.copy(pieces = pieces))
     }
-    
-    game = game.copy(casualties = casualties).updateSpace(sp.copy(pieces = pieces))
+    // Finally update the casualties 
+    game = game.copy(casualties = casualties)
   }
+  
 
   def inspect[T](name: String, value: T): T = {
     println(s"DEBUG: $name == ${value.toString}")

@@ -518,16 +518,24 @@ object Human {
         }
       }
       
-      val choices = List(
-        choice(canMove,                        "move",     "Deploy French pieces"),
-        choice(getResettleCandidates.nonEmpty, "resettle", "Resettle an Algerian space"),
-        choice(true,                           "cancel",   "Cancel Deploy special activity")
-      ).flatten
-      println("\nChoose one:")
-      askMenu(choices).head match {
-        case "move"     => moveFrenchPieces(params); true
-        case "resettle" => resettleSpace(params); true
-        case _          => false
+      if (canMove == false && getResettleCandidates.isEmpty) {
+        println("\nDeploy special activity is not possible at this time.")
+        pause()
+        false
+      }
+      else {
+        log("Government executes a Deploy special ability")
+        val choices = List(
+          choice(canMove,                        "move",     "Deploy French pieces"),
+          choice(getResettleCandidates.nonEmpty, "resettle", "Resettle an Algerian space"),
+          choice(true,                           "cancel",   "Cancel Deploy special activity")
+        ).flatten
+        println("\nChoose one:")
+        askMenu(choices).head match {
+          case "move"     => moveFrenchPieces(params); true
+          case "resettle" => resettleSpace(params); true
+          case _          => false
+        }
       }
     }
     
@@ -609,14 +617,126 @@ object Human {
   
   object Neutralize extends GovSpecial { 
     override def toString() = "Neutralize"
+    val neutralizeFilter = (sp: Space) => sp.pieces.totalTroops > 0 && sp.pieces.totalPolice > 0
+    def getCandidates = spaceNames(game.algerianSpaces filter neutralizeFilter).toSet
+    
     override def execute(params: Params): Boolean = {
-      // if (capabilityInPlay(CapTorture))
-      //   -1 commitment for executing Neutralize special activity
-      //   In each space, remove one extra piece which may be underground (bases last)
-      
-      // if (capabilityInPlay(CapOverkill))
-      //   Remove up to 4 pieces total (still only two spaces max)
-      true
+      if (getCandidates.isEmpty) {
+        println("\nNeutralize special activity is not possible at this time.")
+        pause()
+        false
+      }
+      else {
+        def selectSpaces(selected: List[String]): List[String] = {
+          val candidates = getCandidates filterNot selected.contains
+          if (selected.size == 2 || candidates.isEmpty)
+            selected
+          else {
+            val choices = List(
+              choice(selected.size < 2, "select", "Select a space to neutralize"),
+              choice(selected.nonEmpty, "done",   "Finish selecting spaces to neutralize"),
+              choice(true,              "abort",  "Abort the Neutralize special activity")).flatten
+            
+            println()
+            println(s"Neutralize spaces selected: ${andList(selected)}")
+            println("Choose one:")
+            askMenu(choices).head match {
+              case "select" => 
+                val name = askCandidate("Select space: ", candidates.toList.sorted)
+                selectSpaces(name :: selected)
+              case "done"   => selected
+              case "abort"  => if (askYorN("Really abort? (y/n) ")) throw AbortAction else selectSpaces(selected)
+            }
+          }
+        }
+        
+        log("\nGovernment executes a Neutralize special ability")
+        if (capabilityInPlay(CapOverkill))
+          log("The Overkill capability is in play: Up to four total pieces may be removed")
+        else
+          log("Up to two total pieces may be removed")
+
+        if (capabilityInPlay(CapTorture)) {
+          log("The Torture capability is in play")
+          decreaseCommitment(1)
+          log("One extra piece will be removed from each space (may be underground)")
+        }
+        
+        val totalRemoval = if (capabilityInPlay(CapOverkill)) 4 else 2 // Excluding overkill
+          
+        // The second return may contain a single piece to satisfy the Torture capability
+        // The first return contains any active guerrillas/bases that can be removed.
+        def targetPieces(sp: Space, maxNum: Int): (Pieces, Pieces) = {
+          val torturePiece = if (capabilityInPlay(CapTorture)) {
+            if (sp.pieces.totalGuerrillas == 0 && sp.pieces.flnBases > 0) Pieces(flnBases = 1)
+            else if (sp.pieces.hiddenGuerrillas > 0) Pieces(hiddenGuerrillas = 1) // Hidden first for torture
+            else if (sp.pieces.activeGuerrillas > 0) Pieces(activeGuerrillas = 1)
+            else Pieces()
+          }
+          else Pieces()
+          
+          val regularPieces = if (maxNum == 0)
+            Pieces()
+          else {
+            val p = (sp.pieces - torturePiece)
+            if (p.hiddenGuerrillas > 0) // Hidden guerrillas shield bases
+              Pieces(activeGuerrillas = maxNum min p.activeGuerrillas)
+            else {
+              val active = maxNum min p.activeGuerrillas
+              val bases  = (maxNum - active) min p.flnBases
+              Pieces(activeGuerrillas = active, flnBases = bases)
+            }
+          }
+          (regularPieces, torturePiece)
+        }
+        
+        def nextSpace(remainingSpaces: List[String], numRemoved: Int): List[(String, Pieces)] = 
+        if (remainingSpaces.isEmpty)
+          Nil
+        else {
+          val name = remainingSpaces.head
+          val sp = game.getSpace(name)
+          val (regular, torture) = targetPieces(sp, totalRemoval - numRemoved)
+          val removed = if (remainingSpaces.size == 1 || regular.total == 0)
+            regular
+          else {
+            regular -> s"Remove $regular"
+            
+            def buildChoices(options: List[Pieces]): List[(Pieces, String)] = {
+              if (options == Nil)
+                (Pieces() -> "Remove no pieces") :: Nil
+              else {
+                val opt = options.foldLeft(Pieces()) { (all, p) => all + p }
+                (opt -> s"Remove $opt") :: buildChoices(options.dropRight(1))
+              }
+            }
+            
+            val choices = buildChoices(
+              List.fill(regular.activeGuerrillas)(Pieces(activeGuerrillas = 1)) ::: 
+              List.fill(regular.flnBases)(Pieces(flnBases = 1))).reverse 
+              
+            println()
+            if (torture.total > 0)
+              println(s"$torture will be removed from $name due to the Torture capability")
+            println(s"Choose pieces to remove from $name:")
+            askMenu(choices).head 
+          }
+          (name -> (removed + torture)) :: nextSpace(remainingSpaces.tail, numRemoved + removed.total)
+        }
+        
+        val losses = nextSpace(selectSpaces(Nil).reverse, 0)
+        val spaceNames = losses map (_._1)
+        log(s"\nGovernment neutralizes in ${andList(spaceNames)}")
+        removeLosses(losses)
+        log()
+        for (name <- spaceNames; sp = game.getSpace(name)) {
+          if (!sp.isOppose)
+            decreaseSupport(sp.name, 1)
+          else if (sp.isOppose && !sp.hasTerror)
+            addTerror(sp.name, 1)
+        }
+        true
+      }
     }
   }
   
