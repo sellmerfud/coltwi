@@ -842,18 +842,7 @@ object Human {
       }
     }
   }
-  
-  // Top level entry point to human actions
-  def executeAction(action: Action): Action = action match {
-    case Pass               => performPass(Gov); Pass
-    case ExecOpPlusActivity => 
-      val num = executeOp(Params(includeSpecialActivity = true))
-      if (specialActivity.taken) ExecOpPlusActivity else if (num < 2) ExecLimitedOp else ExecOpOnly
-    case ExecOpOnly         => if (executeOp() < 2) ExecLimitedOp else ExecOpOnly
-    case ExecLimitedOp      => executeOp(Params(maxSpaces = Some(1))); ExecLimitedOp
-    case Event              => executeEvent(); Event
-  }
-  
+    
   // Ask user to select an operation and execute it.
   // Return the number of spaces acted upon
   def executeOp(params: Params = Params()): Int =  {
@@ -888,5 +877,49 @@ object Human {
     
   }
   
+  // A human player has opted to take an action on the current card.
+  def act(): Unit = {
+    // Save the game state to handle the user aborting the action.
+    val savedState = game
+    try {
+      val action = if (deck.isGovPivotalCard(game.currentCard.get))
+        Event
+      else {
+        val isFree = Set[Action](Event, Pass)
+        val actions = if (game.resources(Gov) < 2) 
+          game.sequence.availableActions filter isFree.apply
+        else
+          game.sequence.availableActions
+          
+        println("\nChoose one:")
+        askMenu(actions map (a => a -> a.toString)).head
+      }
+      
+      log(s"\nGovernment chooses: $action")
+      val executedAction = action match {
+        case Pass               => performPass(Gov); Pass
+        case ExecOpPlusActivity => 
+          val num = executeOp(Params(includeSpecialActivity = true))
+          if (specialActivity.taken) ExecOpPlusActivity else if (num < 2) ExecLimitedOp else ExecOpOnly
+        case ExecOpOnly         => if (executeOp() < 2) ExecLimitedOp else ExecOpOnly
+        case ExecLimitedOp      => executeOp(Params(maxSpaces = Some(1))); ExecLimitedOp
+        case Event              => executeEvent(); Event
+      }
+      
+      // For the first eligible role, we adjust the action base on what they
+      // actually did.  This affects eligibiliy for the following turn.
+      val finalAction = if (game.sequence.numActed == 0) executedAction else action
+      
+      log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box")
+      game = game.copy(sequence = game.sequence.nextAction(finalAction))
+    }
+    catch {
+      case AbortAction =>
+        println("\n>>>> Aborting the current action <<<<")
+        println(separator())
+        displayGameStateDifferences(game, savedState)
+        game = savedState
+    }
+  }
   
 }

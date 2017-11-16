@@ -1679,7 +1679,7 @@ object ColonialTwilight {
   object GovCmd extends Command {
     val name = "gov"
     val desc = "Take an action on the current card"
-    val action = (_: Option[String]) => humanAction()
+    val action = (_: Option[String]) => Human.act()
   }
   
   object PivotCmd extends Command {
@@ -1763,43 +1763,7 @@ object ColonialTwilight {
     increaseResources(role, if (role == Gov) 2 else 1)
   }
   
-  // A human player has opted to take an action on the current card.
-  // If they are the first to act, ask which action the wish to peform.
-  def humanAction(): Unit = {
-    // Save the game state to handle the user aborting the action.
-    val savedState = game
-    try {
-      val action = if (deck.isGovPivotalCard(game.currentCard.get))
-        Event
-      else {
-        val isFree = Set[Action](Event, Pass)
-        val actions = if (game.resources(Gov) < 2) 
-          game.sequence.availableActions filter isFree.apply
-        else
-          game.sequence.availableActions
-          
-        println("\nChoose one:")
-        askMenu(actions map (a => a -> a.toString)).head
-      }
-      
-      log(s"\nGovernment chooses: $action")
-      val executedAction = Human.executeAction(action)
-      // For the first eligible role, we adjust the action base on what they
-      // actually did.  This affects eligibiliy for the following turn.
-      val finalAction = if (game.sequence.numActed == 0) executedAction else action
-      
-      log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box")
-      game = game.copy(sequence = game.sequence.nextAction(finalAction))
-    }
-    catch {
-      case AbortAction =>
-        println("\n>>>> Aborting the current action <<<<")
-        println(separator())
-        displayGameStateDifferences(game, savedState)
-        game = savedState
-    }
-  }
-  
+
   def doPivot(role: Role): Unit = {
     val other = Role.opposite(role)
     
