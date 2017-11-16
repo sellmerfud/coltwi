@@ -611,6 +611,8 @@ object Human {
         (if (momentumInPlay(MoVentilos))              1 else 0) +
         (if (momentumInPlay(MoCrossBorderAirStrike)) -1 else 0) +
         (if (momentumInPlay(MoStrategicMovement))    -1 else 0)
+        // Select 3 spaces
+        // Move any FRENCH troops among the three spaces.
       true  
     }
   }
@@ -702,18 +704,16 @@ object Human {
           else {
             regular -> s"Remove $regular"
             
-            def buildChoices(options: List[Pieces]): List[(Pieces, String)] = {
-              if (options == Nil)
+            def buildChoices(collection: List[Pieces]): List[(Pieces, String)] = {
+              if (collection == Nil)
                 (Pieces() -> "Remove no pieces") :: Nil
               else {
-                val opt = options.foldLeft(Pieces()) { (all, p) => all + p }
-                (opt -> s"Remove $opt") :: buildChoices(options.dropRight(1))
+                val opt = Pieces.combined(collection)
+                (opt -> s"Remove $opt") :: buildChoices(collection.dropRight(1))
               }
             }
             
-            val choices = buildChoices(
-              List.fill(regular.activeGuerrillas)(Pieces(activeGuerrillas = 1)) ::: 
-              List.fill(regular.flnBases)(Pieces(flnBases = 1))).reverse 
+            val choices = buildChoices(regular.explode(ActiveGuerrillas::FlnBases::Nil)).reverse
               
             println()
             if (torture.total > 0)

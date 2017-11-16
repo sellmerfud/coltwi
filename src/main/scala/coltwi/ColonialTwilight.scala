@@ -393,10 +393,18 @@ object ColonialTwilight {
       assert(activeGuerrillas >= num, "Not enough active guerrillas")
       this - Pieces(activeGuerrillas = num) + Pieces(hiddenGuerrillas = num)
     }
+    
+    // Convert to a list where each piece is wrapped in its own Pieces object.
+    def explode(order: List[PieceType] = AllPieceTypes): List[Pieces] = {
+      order flatMap { pieceType => List.fill(numOf(pieceType))(Pieces().set(1, pieceType)) }
+    }
   }
   
+  object Pieces {
+    def combined(collection: Seq[Pieces]) =
+      collection.foldLeft(Pieces()) { (combined, pieces) => combined + pieces }
+  }
   
-
 
   // Types of map spaces
   sealed trait SpaceType
@@ -1238,12 +1246,12 @@ object ColonialTwilight {
   // Ask the user to select a number of pieces. 
   // The type of pieces allowed for selection may be limited by passing a list of those
   // that are allowed.  An empty list indicates that all types of pieces may be selected.
-  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType] = Nil, allowAbort: Boolean = true): Pieces = {
-    val pieceTypes = (if (allowed.nonEmpty) allowed else AllPieceTypes) filter (pieces.numOf(_) > 0)
+  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType] = AllPieceTypes, allowAbort: Boolean = true): Pieces = {
+    val pieceTypes = allowed filter (pieces.numOf(_) > 0)
     var selected   = Pieces()
     val numPieces  = num min pieces.totalOf(pieceTypes)
     if (numPieces > 0) {
-      val available = pieceTypes.foldLeft(Pieces()) { (p, pt) => p.add(pieces.numOf(pt), pt) }
+      val available = pieces.only(pieceTypes)
       println()
       println(s"Select ${amountOf(numPieces, "piece")} among the following:")
       println(available.toString)
