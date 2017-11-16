@@ -1246,37 +1246,44 @@ object ColonialTwilight {
   // Ask the user to select a number of pieces. 
   // The type of pieces allowed for selection may be limited by passing a list of those
   // that are allowed.  An empty list indicates that all types of pieces may be selected.
-  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType] = AllPieceTypes, allowAbort: Boolean = true): Pieces = {
+  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType] = AllPieceTypes,
+      heading: Option[String] = None,
+      allowAbort: Boolean = true): Pieces = {
     val pieceTypes = allowed filter (pieces.numOf(_) > 0)
     var selected   = Pieces()
     val numPieces  = num min pieces.totalOf(pieceTypes)
     if (numPieces > 0) {
-      val available = pieces.only(pieceTypes)
-      println()
-      println(s"Select ${amountOf(numPieces, "piece")} among the following:")
-      println(available.toString)
-      println()
+      if (pieceTypes.size == 1)
+        selected = selected.set(numPieces, pieceTypes.head)
+      else {
+        val available = pieces.only(pieceTypes)
+        println()
+        heading foreach println
+        println(s"Select ${amountOf(numPieces, "piece")} among the following:")
+        println(available.toString)
+        println()
       
-      def nextType(types: List[PieceType]): Unit = {
-        val numRemaining = numPieces - selected.total
-        if (numRemaining != 0) {
-          // If we have to include all remainig pieces, don't bother asking
-          if (pieces.totalOf(types) == numRemaining) {
-            for (pieceType <- types)
-              selected = selected.add(pieces.numOf(pieceType), pieceType)
-          }
-          else {
-            val (pieceType :: rest) = types
-            val totalOfRest = pieces.totalOf(rest)
-            val minimum = if (totalOfRest < numRemaining) numRemaining - totalOfRest else 0
-            val maximum = numRemaining min pieces.numOf(pieceType)
-            val n = askInt(s"How many ${pieceType}", minimum, maximum, allowAbort = allowAbort)
-            selected = selected.add(n, pieceType)
-            nextType(rest)
+        def nextType(types: List[PieceType]): Unit = {
+          val numRemaining = numPieces - selected.total
+          if (numRemaining != 0) {
+            // If we have to include all remainig pieces, don't bother asking
+            if (pieces.totalOf(types) == numRemaining) {
+              for (pieceType <- types)
+                selected = selected.add(pieces.numOf(pieceType), pieceType)
+            }
+            else {
+              val (pieceType :: rest) = types
+              val totalOfRest = pieces.totalOf(rest)
+              val minimum = if (totalOfRest < numRemaining) numRemaining - totalOfRest else 0
+              val maximum = numRemaining min pieces.numOf(pieceType)
+              val n = askInt(s"How many ${pieceType}", minimum, maximum, allowAbort = allowAbort)
+              selected = selected.add(n, pieceType)
+              nextType(rest)
+            }
           }
         }
+        nextType(pieceTypes)
       }
-      nextType(pieceTypes)
     }
     selected
   }
