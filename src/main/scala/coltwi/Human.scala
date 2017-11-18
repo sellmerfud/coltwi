@@ -225,7 +225,7 @@ object Human {
     override def toString() = "Garrison"
     val destFilter     = (sp: Space) => { sp.isResettled || sp.population > 0 }
     val sourceFilter   = (sp: Space) => { destFilter(sp) && movablePolice(sp) > 0 }
-    def movablePolice(sp: Space) = sp.pieces.totalPolice - movingGroups(sp.name).totalPolice
+    def movablePolice(sp: Space) = sp.totalPolice - movingGroups(sp.name).totalPolice
     
     override def execute(params: Params): Int = {
       def totalMoved = movingGroups.toList.foldLeft(0) { case (sum, (_, p)) => sum + p.totalPolice }
@@ -298,16 +298,16 @@ object Human {
     // there are enough police cubes.  
     def activateGuerrillas(params: Params): Unit = {
       def guerrillasActivated(sp: Space) = if (sp.isMountains)
-        (sp.pieces.totalPolice / 2) min sp.pieces.hiddenGuerrillas
+        (sp.totalPolice / 2) min sp.hiddenGuerrillas
       else
-        sp.pieces.totalPolice min sp.pieces.hiddenGuerrillas
+        sp.totalPolice min sp.hiddenGuerrillas
       val candidates = spaceNames(game.algerianSpaces filter (guerrillasActivated(_) > 0))
       if (candidates.isEmpty)
         println(s"\nThere are no spaces where hidden guerrillas can be activated by police cubes")
       else {
         val name = askCandidate(s"Choose space to activate guerrillas: ", candidates.sorted, allowAbort = false)
         val sp = game.getSpace(name)
-        val num = if (sp.isMountains) sp.pieces.totalPolice / 2 else sp.pieces.totalPolice
+        val num = if (sp.isMountains) sp.totalPolice / 2 else sp.totalPolice
         activateHiddenGuerrillas(name, guerrillasActivated(sp))
       }
     }
@@ -315,13 +315,13 @@ object Human {
   
   object Sweep extends GovOp {
     override def toString() = "Sweep"
-    def movableTroops(sp: Space) = sp.pieces.totalTroops - movingGroups(sp.name).totalTroops
+    def movableTroops(sp: Space) = sp.totalTroops - movingGroups(sp.name).totalTroops
     // Return adjacent spaces that contains movable troops
     def sourceSpaces(sp: Space) = spaceNames(spaces(getAdjacent(sp.name)) filter (movableTroops(_) > 0))
     def guerrillasActivated(sp: Space) = if (sp.isMountains)
-      (sp.pieces.totalCubes / 2) min sp.pieces.hiddenGuerrillas
+      (sp.totalCubes / 2) min sp.hiddenGuerrillas
     else
-      sp.pieces.totalCubes min sp.pieces.hiddenGuerrillas
+      sp.totalCubes min sp.hiddenGuerrillas
     val sweepFilter = (sp: Space) => guerrillasActivated(sp) > 0 || sourceSpaces(sp).nonEmpty
     
     override def execute(params: Params): Int = {
@@ -398,13 +398,13 @@ object Human {
                 nextSource()
               case source =>
                 val sp = game.getSpace(source)
-                val movable = (sp.pieces - movingGroups(source)).only(TROOPS)
+                val movable = (sp - movingGroups(source)).only(TROOPS)
                 println()
                 println(s"The following troops are eligible to move from $source:")
                 wrap("  ", movable.stringItems) foreach println 
                 val num = askInt(s"Move how many troops", 0, movableTroops(sp), allowAbort = false)
                 if (num > 0) {
-                  val p = askPieces(sp.pieces - movingGroups(source), num, TROOPS)
+                  val p = askPieces(sp - movingGroups(source), num, TROOPS)
                   movePieces(p, source, spaceName)
                   movingGroups.add(spaceName, p)
                 }
@@ -431,13 +431,13 @@ object Human {
     override def toString() = "Assault"
     
     def flnLosses(sp: Space): Pieces = {
-      val totalCubes = if (sp.isCity || sp.isBorderSector) sp.pieces.totalCubes else sp.pieces.totalTroops
+      val totalCubes = if (sp.isCity || sp.isBorderSector) sp.totalCubes else sp.totalTroops
       val maxLosses  = if (sp.isMountains) totalCubes / 2 else totalCubes
-      val numGuerrillas = sp.pieces.activeGuerrillas min maxLosses
-      val numBases = if (sp.pieces.flnBases == 0 || sp.pieces.hiddenGuerrillas > 0 || sp.pieces.activeGuerrillas >= maxLosses)
+      val numGuerrillas = sp.activeGuerrillas min maxLosses
+      val numBases = if (sp.flnBases == 0 || sp.hiddenGuerrillas > 0 || sp.activeGuerrillas >= maxLosses)
         0
       else
-        (maxLosses - numGuerrillas) min sp.pieces.flnBases
+        (maxLosses - numGuerrillas) min sp.flnBases
       Pieces(activeGuerrillas = numGuerrillas, flnBases = numBases)
     }
     val assaultFilter = (sp: Space) => flnLosses(sp).total > 0
@@ -519,7 +519,7 @@ object Human {
         val candidates = getMoveCandidates
         candidates.nonEmpty && availPieces.total > 0 && {
           val mapPieces = spaces(candidates).foldLeft(0) { 
-            case (sum, sp) => sum + sp.pieces.only(List(FrenchTroops, FrenchPolice, GovBases)).total
+            case (sum, sp) => sum + sp.only(List(FrenchTroops, FrenchPolice, GovBases)).total
           }
           mapPieces > 0
         }
@@ -584,7 +584,7 @@ object Human {
         if askYorN(s"Deploy pieces out of $src (y/n) ")
         dest <- deploySpaces filterNot (_ == src)
       } {
-        val srcPieces = if (src == AB) availPieces else game.getSpace(src).pieces.only(FrenchPieces) - deployed(src)
+        val srcPieces = if (src == AB) availPieces else game.getSpace(src).only(FrenchPieces) - deployed(src)
         if (srcPieces.total > 0 && numDeployed < 6) {
           val num = askInt(s"Deploy how many pieces from $src to $dest", 0, srcPieces.total min (6 - numDeployed))
           if (num > 0) {
@@ -655,11 +655,11 @@ object Human {
         
         def liftTroops(src: String, dst: String): Unit = {
           val (srcSpace, dstSpace) = (game.getSpace(src), game.getSpace(dst))
-          if (srcSpace.pieces.totalTroops > 0) {
-            askInt(s"Lift how many troops from $src to $dst", 0, srcSpace.pieces.totalTroops) match {
+          if (srcSpace.totalTroops > 0) {
+            askInt(s"Lift how many troops from $src to $dst", 0, srcSpace.totalTroops) match {
               case 0   =>
               case num => 
-                val (pieces, swept) = askTroops(srcSpace.pieces, movingGroups(src), num)
+                val (pieces, swept) = askTroops(srcSpace, movingGroups(src), num)
                 movePieces(pieces, src, dst)
                 movingGroups.remove(src, swept)
                 movingGroups.add(dst, swept)
@@ -672,7 +672,7 @@ object Human {
         log(s"May select up to ${maxSpaces} spaces")
         
         val selectedSpaces = selectSpaces(Nil).reverse
-        val withTroops = selectedSpaces filter (name => game.getSpace(name).pieces.totalTroops > 0)
+        val withTroops = selectedSpaces filter (name => game.getSpace(name).totalTroops > 0)
         
         if (withTroops.isEmpty) {
           println()
@@ -718,7 +718,7 @@ object Human {
   
   object Neutralize extends GovSpecial { 
     override def toString() = "Neutralize"
-    val neutralizeFilter = (sp: Space) => sp.pieces.totalTroops > 0 && sp.pieces.totalPolice > 0
+    val neutralizeFilter = (sp: Space) => sp.totalTroops > 0 && sp.totalPolice > 0
     def getCandidates = spaceNames(game.algerianSpaces filter neutralizeFilter).toSet
     
     override def execute(params: Params): Boolean = {
@@ -771,9 +771,9 @@ object Human {
         // The first return contains any active guerrillas/bases that can be removed.
         def targetPieces(sp: Space, maxNum: Int): (Pieces, Pieces) = {
           val torturePiece = if (capabilityInPlay(CapTorture)) {
-            if (sp.pieces.totalGuerrillas == 0 && sp.pieces.flnBases > 0) Pieces(flnBases = 1)
-            else if (sp.pieces.hiddenGuerrillas > 0) Pieces(hiddenGuerrillas = 1) // Hidden first for torture
-            else if (sp.pieces.activeGuerrillas > 0) Pieces(activeGuerrillas = 1)
+            if (sp.totalGuerrillas == 0 && sp.flnBases > 0) Pieces(flnBases = 1)
+            else if (sp.hiddenGuerrillas > 0) Pieces(hiddenGuerrillas = 1) // Hidden first for torture
+            else if (sp.activeGuerrillas > 0) Pieces(activeGuerrillas = 1)
             else Pieces()
           }
           else Pieces()

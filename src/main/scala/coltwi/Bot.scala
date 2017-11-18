@@ -43,8 +43,8 @@ object Bot {
 
   // Does space have a guerrilla that can be flipped without exposing any bases?
   def hasSafeHiddenGuerrilla(sp: Space) = 
-    (sp.pieces.flnBases == 0 && sp.pieces.hiddenGuerrillas > 0) ||
-    (sp.pieces.flnBases > 0  && sp.pieces.hiddenGuerrillas > 1)
+    (sp.flnBases == 0 && sp.hiddenGuerrillas > 0) ||
+    (sp.flnBases > 0  && sp.hiddenGuerrillas > 1)
 
   def executeQuietly[T](code: => T): (GameState, T) = {
     val savedGameState = game
@@ -201,19 +201,19 @@ object Bot {
 
   def subvertCommands: List[SubvertCmd] = {
     val ALGERIAN = List(AlgerianPolice, AlgerianTroops)
-    val hasG = (sp: Space) => sp.pieces.hiddenGuerrillas > 0
-    val last2Cubes = game.algerianSpaces filter (sp => hasG(sp) && sp.pieces.algerianCubes == 2 && sp.pieces.frenchCubes == 0)
-    val lastCube   = game.algerianSpaces filter (sp => hasG(sp) && sp.pieces.algerianCubes == 1 && sp.pieces.frenchCubes == 0)
-    val withPolice = game.algerianSpaces filter (sp => hasG(sp) && sp.pieces.algerianPolice > 0)
-    val has2Police = CriteriaFilter("2 Police cubes", _.pieces.algerianPolice == 1)
-    val hasPolice  = CriteriaFilter("Police cube", _.pieces.algerianPolice > 0)
-    val generic    = game.algerianSpaces filter (sp => hasG(sp) && sp.pieces.algerianCubes > 0)
+    val hasG = (sp: Space) => sp.hiddenGuerrillas > 0
+    val last2Cubes = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes == 2 && sp.frenchCubes == 0)
+    val lastCube   = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes == 1 && sp.frenchCubes == 0)
+    val withPolice = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianPolice > 0)
+    val has2Police = CriteriaFilter("2 Police cubes", _.algerianPolice == 1)
+    val hasPolice  = CriteriaFilter("Police cube", _.algerianPolice > 0)
+    val generic    = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes > 0)
     def bestPiece(pieces: Pieces): Pieces = 
       if (pieces.algerianPolice > 0) Pieces(algerianPolice = 1)
       else Pieces(algerianTroops = 1)
     if (last2Cubes.nonEmpty) {
       val target = topPriority(last2Cubes, List(has2Police, hasPolice))
-      List(SubvertCmd(false, target.name, target.pieces.only(ALGERIAN)))
+      List(SubvertCmd(false, target.name, target.only(ALGERIAN)))
     }
     else if (lastCube.size == 1) {
       val target = lastCube.head
@@ -266,8 +266,8 @@ object Bot {
   def tryExtort(): Unit = if (canDoSpecialActivity && game.resources(Fln) < 5) {
     val primary = (game.algerianSpaces filter { sp => 
       sp.isFlnControlled && (
-        (sp.pieces.flnBases > 0 && sp.pieces.totalCubes > 0 && sp.pieces.hiddenGuerrillas > 2) ||
-        ((sp.pieces.flnBases == 0 || sp.pieces.totalCubes == 0) && sp.pieces.hiddenGuerrillas > 1)
+        (sp.flnBases > 0 && sp.totalCubes > 0 && sp.hiddenGuerrillas > 2) ||
+        ((sp.flnBases == 0 || sp.totalCubes == 0) && sp.hiddenGuerrillas > 1)
       ) 
     }) ::: (game.countrySpaces filter hasSafeHiddenGuerrilla)
     
@@ -316,9 +316,9 @@ object Bot {
   object EachAlgerianBaseHasUnderground extends ActionFlowchartNode {
     val desc = "Each Algerian Base at +1 Pop has 2+ underground guerrillas...?"
     def execute: Either[ActionFlowchartNode, Action] = {
-      val basesCovered = (game.algerianSpaces filter (_.pieces.flnBases > 0)) forall { sp => 
-        (sp.population == 0 && sp.pieces.hiddenGuerrillas > 0) ||
-        (sp.population > 0  && sp.pieces.hiddenGuerrillas > 1)
+      val basesCovered = (game.algerianSpaces filter (_.flnBases > 0)) forall { sp => 
+        (sp.population == 0 && sp.hiddenGuerrillas > 0) ||
+        (sp.population > 0  && sp.hiddenGuerrillas > 1)
       }
       if (basesCovered)
         Left(ConsiderTerrorOrEvent)
@@ -362,7 +362,7 @@ object Bot {
         (dieRoll < 5 && 
            (eventState.govScore < game.govScore ||
             eventState.franceTrack > game.franceTrack ||
-            eventState.totalOnMap(_.pieces.flnBases) > game.totalOnMap(_.pieces.flnBases) ||
+            eventState.totalOnMap(_.flnBases) > game.totalOnMap(_.flnBases) ||
             eventState.resources(Fln) > game.resources(Fln))
         )
       }
@@ -393,13 +393,26 @@ object Bot {
     }
   }
 
+  object ConsiderAttack extends ActionFlowchartNode {
+    val desc = "Consider Attack Operation"
+    def execute: Either[ActionFlowchartNode, Action] = {
+      // val hasGov = (sp: Space) => sp.totalCubes > 0 || sp.govBases > 0
+      // val foo = (sp: Space) => sp.flnBases == 0 && sp.pieces
+      // val primary = game.algerianSpaces filter (sp => hasSafeHiddenGuerrilla(sp) )
+      // val attackResult = if (terrorCandidates.nonEmpty) Some(executeQuietly { doTerror() }) else None
+      //
+      // tryExtort() // If no ambush and bot can do special
+      Right(Pass)
+    }
+  }
+
   object ConsiderRally extends ActionFlowchartNode {
     val desc = "Consider Rally Operation"
     def execute: Either[ActionFlowchartNode, Action] = Right(Pass)
   }
-
-  object ConsiderAttack extends ActionFlowchartNode {
-    val desc = "Consider Attack Operation"
+  
+  object ConsiderMarch extends ActionFlowchartNode {
+    val desc = "Consider March Operation"
     def execute: Either[ActionFlowchartNode, Action] = Right(Pass)
   }
 

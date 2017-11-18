@@ -35,6 +35,7 @@ import scala.util.Properties.{lineSeparator, isWin}
 import scala.collection.immutable.ListMap
 import scala.collection.mutable.ListBuffer
 import scala.io.StdIn.readLine
+import scala.language.implicitConversions
 import scenarios._
 
 object ColonialTwilight {
@@ -412,6 +413,9 @@ object ColonialTwilight {
       collection.foldLeft(Pieces()) { (combined, pieces) => combined + pieces }
   }
   
+  // Convenience wo that we can use for example
+  //    sp.hiddenGuerrillas in place of sp.pieces.hiddenGuerrillas
+  implicit def spacePieces(sp: Space): Pieces = sp.pieces
 
   // Types of map spaces
   sealed trait SpaceType
@@ -784,7 +788,7 @@ object ColonialTwilight {
     def isPropRound = currentCard map deck.isPropagandaCard getOrElse false
     
     def govScore = totalOnMap(_.supportValue) + commitment
-    def flnScore = totalOnMap(_.opposeValue)  + totalOnMap(_.pieces.flnBases)
+    def flnScore = totalOnMap(_.opposeValue)  + totalOnMap(_.flnBases)
     
     def scenarioSummary: Seq[String] = {
       val b = new ListBuffer[String]
@@ -892,7 +896,7 @@ object ColonialTwilight {
       b += s"${sp.nameAndZone}  (Pop ${sp.population})"
       b += separator()
       wrap("Status : ", Seq(sp.control.toString, sp.support.toString)) foreach (l => b += l)
-      wrap("Pieces : ", sp.pieces.stringItems)  foreach (l => b += l)
+      wrap("Pieces : ", sp.stringItems)  foreach (l => b += l)
       if (sp.markers.nonEmpty)
         wrap("Markers: ", sp.markers.sorted)  foreach (l => b += l)
       b.toList
@@ -916,13 +920,13 @@ object ColonialTwilight {
     
   def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
-    game = game.updatePieces(sp, sp.pieces.activateGuerrillas(num))
+    game = game.updatePieces(sp, sp.activateGuerrillas(num))
     log(s"Flip ${hiddenG(num)} in $spaceName to active")
   }
   
   def hideActiveGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
-    game = game.updatePieces(sp, sp.pieces.hideGuerrillas(num))
+    game = game.updatePieces(sp, sp.hideGuerrillas(num))
     log(s"Flip ${activeG(num)} in $spaceName to underground")
   }
 
@@ -1311,8 +1315,8 @@ object ColonialTwilight {
     // Get number of each type in available box plus on map (but not in target space)
     val availNum = (types map { pieceType =>
       val num = game.availablePieces.numOf(pieceType) + 
-                game.totalOnMap(_.pieces.numOf(pieceType)) - 
-                game.getSpace(spaceName).pieces.numOf(pieceType)
+                game.totalOnMap(_.numOf(pieceType)) - 
+                game.getSpace(spaceName).numOf(pieceType)
       (pieceType -> num)
     }).toMap
     val maxPieces = maxToPlace min (availNum.values.sum)
@@ -1350,8 +1354,8 @@ object ColonialTwilight {
 
   // Ask the user to remove the given number of pieces of the requested type from the map.
   def voluntaryRemoval(num: Int, pieceType: PieceType, prohibitedSpaces: Set[String]): Unit = {
-    val candidateNames = spaceNames(game.spaces filterNot (sp => prohibitedSpaces(sp.name)) filter (_.pieces.numOf(pieceType) > 0))
-    def availPieces(names: List[String]) = names.foldLeft(0)((sum, n) => sum + game.getSpace(n).pieces.numOf(pieceType))
+    val candidateNames = spaceNames(game.spaces filterNot (sp => prohibitedSpaces(sp.name)) filter (_.numOf(pieceType) > 0))
+    def availPieces(names: List[String]) = names.foldLeft(0)((sum, n) => sum + game.getSpace(n).numOf(pieceType))
     assert(availPieces(candidateNames) >= num, "voluntaryRemoval: Not enough pieces on map!")
     println(s"\nRemove ${amtPiece(num, pieceType)} from the map.")
     
@@ -1363,11 +1367,11 @@ object ColonialTwilight {
         removed
       else if (avail == numLeft) {
         // Remove all remaining pieces
-        removed ++ (candidates map (n => (n -> game.getSpace(n).pieces.numOf(pieceType))))
+        removed ++ (candidates map (n => (n -> game.getSpace(n).numOf(pieceType))))
       }
       else {
         val name = askCandidate(s"\nSelect space to remove $pieceType: ", candidates)
-        val numInSpace = game.getSpace(name).pieces.numOf(pieceType) min numLeft
+        val numInSpace = game.getSpace(name).numOf(pieceType) min numLeft
         val minFromSpace = 1 max (numLeft - (avail - numInSpace))
         val x = askInt(s"Remove how many", minFromSpace, numInSpace)
         nextSpace(removed :+ (name -> x), candidates filterNot (_ == name))
@@ -1378,7 +1382,7 @@ object ColonialTwilight {
     
     log()
     for ((name, number) <- removed; sp = game.getSpace(name)) {
-      val updated = sp.copy(pieces = sp.pieces.remove(number, pieceType))
+      val updated = sp.copy(pieces = sp.remove(number, pieceType))
       game = game.updateSpace(updated)
       log(s"Remove ${amtPiece(number, pieceType)} from $name to the available box")
       logControlChange(sp, updated)
@@ -2253,12 +2257,12 @@ object ColonialTwilight {
   def adjustPieces(name: String, pieceType: PieceType): Unit = {
     val sp = game.getSpace(name)
     val pickFrom = game.availablePieces + sp.pieces
-    val current  = sp.pieces.numOf(pieceType)
+    val current  = sp.numOf(pieceType)
     val maxNum   = pieceType match {
-      case GovBases         => (sp.maxBases - sp.pieces.flnBases) min pickFrom.numOf(pieceType)
-      case FlnBases         => (sp.maxBases - sp.pieces.govBases) min pickFrom.numOf(pieceType)
-      case HiddenGuerrillas => game.guerrillasAvailable + sp.pieces.hiddenGuerrillas
-      case ActiveGuerrillas => game.guerrillasAvailable + sp.pieces.activeGuerrillas
+      case GovBases         => (sp.maxBases - sp.flnBases) min pickFrom.numOf(pieceType)
+      case FlnBases         => (sp.maxBases - sp.govBases) min pickFrom.numOf(pieceType)
+      case HiddenGuerrillas => game.guerrillasAvailable + sp.hiddenGuerrillas
+      case ActiveGuerrillas => game.guerrillasAvailable + sp.activeGuerrillas
       case _                => pickFrom.numOf(pieceType)
     }
     if (maxNum == 0) {
@@ -2269,7 +2273,7 @@ object ColonialTwilight {
       val label = pieceType.toString
       adjustInt(label, current, 0 to maxNum) foreach { value =>
         logAdjustment(name, label, current, value)
-        game = game.updateSpace(sp.copy(pieces = sp.pieces.set(value, pieceType)))
+        game = game.updateSpace(sp.copy(pieces = sp.set(value, pieceType)))
         saveAdjustment(name, label)
       }
     }
