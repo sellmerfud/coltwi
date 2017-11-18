@@ -134,7 +134,7 @@ object Bot {
     }
     nextPriority(spaces, priorities)
   }
-
+  
   // A boolean criteria filter
   // Filters the given spaces and returns the results.
   case class CriteriaFilter(val desc: String, criteria: (Space) => Boolean) extends SpaceFilter {
@@ -271,7 +271,7 @@ object Bot {
       ) 
     }) ::: (game.countrySpaces filter hasSafeHiddenGuerrilla)
     
-    val primaryNames = (primary map (_.name)).toSet
+    val primaryNames = spaceNames(primary).toSet
     val secondary  = game.algerianSpaces filter 
       (sp => !primaryNames(sp.name) && sp.isFlnControlled && hasSafeHiddenGuerrilla(sp))
     
@@ -395,20 +395,154 @@ object Bot {
 
   object ConsiderAttack extends ActionFlowchartNode {
     val desc = "Consider Attack Operation"
+    
+    // Sort priority
+    //     Can remove base
+    //     Can remove French Troop
+    //     Can remove French Police
+    //     Max pieces removed
+    def spacePriority(ambush: Boolean) = new Ordering[Space] {
+      val govBaseExposed =
+        if (ambush) (sp: Space) => sp.govBases > 0 && sp.totalCubes == 0
+        else        (sp: Space) => sp.govBases > 0 && sp.totalCubes < 2
+      val frenchTroopExposed =
+        if (ambush) (sp: Space) => sp.frenchTroops > 0 && sp.totalPolice == 0
+        else        (sp: Space) => sp.frenchTroops > 0 && sp.totalPolice < 2
+      def compare(x: Space, y: Space) = {
+        (govBaseExposed(x), govBaseExposed(y)) match {
+          case (true, false) => -1
+          case (false, true) =>  1
+          case _ =>
+            (frenchTroopExposed(x), frenchTroopExposed(y)) match {
+              case (true, false) => -1
+              case (false, true) =>  1
+              case _ =>
+                (x.frenchPolice > 0, y.frenchPolice > 0) match {
+                  case (true, false) => -1
+                  case (false, true) =>  1
+                  case _ =>
+                    if (ambush) ((y.totalCubes + y.govBases) min 1) - ((x.totalCubes + x.govBases) min 1)
+                    else        ((y.totalCubes + y.govBases) min 2) - ((x.totalCubes + x.govBases) min 2)
+                }
+            }
+        }
+      }
+    }
+    
+    def attackInSpace(name: String, ambush: Boolean): Unit = {
+      var sp = game.getSpace(name)
+      if (ambush) {
+        log()
+        log(s"$Fln executes Attack operation with ambush: $name")
+        decreaseResources(Fln, 1)
+        activateHiddenGuerrillas(name, 1)
+        removeLosses(name, attackLosses(sp.pieces, ambush))
+      }
+      else {
+        log()
+        log(s"$Fln executes Attack operation: $name")
+        decreaseResources(Fln, 1)
+        activateHiddenGuerrillas(name, sp.hiddenGuerrillas)
+        sp = game.getSpace(name)
+        log(s"${amountOf(sp.totalGuerrillas, "guerrilla")} present")
+        val die = dieRoll
+        val result = if (die <= sp.totalGuerrillas) s"$die (succeeds)" else s"$die (fails)"
+        log(s"Die roll result is: $result")
+        if (die <= sp.totalGuerrillas) {
+          removeLosses(name, attackLosses(sp.pieces, ambush))
+          if (die == 1) {
+            log("Capture goods (die roll == 1)")
+            if (game.guerrillasAvailable == 0)
+              log("No guerrillas in the available box")
+            else
+              placePieces(name, Pieces(hiddenGuerrillas = 1))
+          }
+        }
+      }
+    }
+    
+    def attackLosses(pieces: Pieces, ambush: Boolean): Pieces = {
+      val maxLosses = if (ambush) 1 else 2
+      var losses    = Pieces()
+      def remaining = maxLosses - losses.total
+      
+      for (pieceType <- List(FrenchPolice, AlgerianPolice, FrenchTroops, AlgerianTroops, GovBases))
+        losses = losses.add(pieces.numOf(pieceType) min remaining, pieceType)
+        
+      val attrition = (if (ambush) 0 else losses.govBases + losses.frenchCubes) min pieces.activeGuerrillas
+      losses + Pieces(activeGuerrillas = attrition)
+    }
+    
+    // Must be able to kill at least two government pieces total.
     def execute: Either[ActionFlowchartNode, Action] = {
-      // val hasGov = (sp: Space) => sp.totalCubes > 0 || sp.govBases > 0
-      // val foo = (sp: Space) => sp.flnBases == 0 && sp.pieces
-      // val primary = game.algerianSpaces filter (sp => hasSafeHiddenGuerrilla(sp) )
-      // val attackResult = if (terrorCandidates.nonEmpty) Some(executeQuietly { doTerror() }) else None
-      //
-      // tryExtort() // If no ambush and bot can do special
-      Right(Pass)
+      val hasGov          = (sp: Space) => sp.totalCubes > 0 || sp.govBases > 0
+      val noAmbush        = (sp: Space) => sp.flnBases == 0 && sp.totalGuerrillas >= 6 && hasGov(sp)
+      val withAmbush      = (sp: Space) => hasSafeHiddenGuerrilla(sp) && hasGov(sp)
+      val with4Guerrillas = (sp: Space) => sp.flnBases == 0 && sp.totalGuerrillas >= 4 && hasGov(sp)
+      
+      // Do we have at least one space where we can guaranteee success without ambush
+      val noAmbushCandidates = game.algerianSpaces filter noAmbush
+      val noAmbushKillTwoCandidates = noAmbushCandidates filter (sp => sp.totalCubes + sp.govBases > 1)
+      val noAmbushNames      = spaceNames(noAmbushCandidates).toSet
+      val ambushCandidates   = game.algerianSpaces filter (sp => !noAmbushNames(sp.name) && withAmbush(sp))
+      
+      // Bot does not extort to pay for attacks
+      // With only one resource there must be a space with 6+ guerrillas (and no base)
+      // and at least two government pieces.
+      val canKillAtLeastTwo = game.resources(Fln) match {
+        case 0                         => false
+        case 1                         => noAmbushKillTwoCandidates.nonEmpty
+        case _ if canDoSpecialActivity => noAmbushCandidates.size + ambushCandidates.size > 1
+        case _                         => noAmbushCandidates.size > 1
+      }
+      
+      if (canKillAtLeastTwo) {
+        log()
+        log(s"$Fln chooses: Attack")
+        val numSpaces = if (game.resources(Fln) == 1) {
+          val target = noAmbushKillTwoCandidates.sorted(spacePriority(false)).head
+          attackInSpace(target.name, false)
+          1
+        }
+        else {
+          def doAttacks(candidates: List[Space], ambush: Boolean): List[String] = {
+            candidates match {
+              case Nil                           => Nil
+              case _ if game.resources(Fln) == 0 => Nil
+              case t::ts =>
+                attackInSpace(t.name, ambush)
+                t.name :: doAttacks(ts, ambush)
+            }
+          }
+          
+          // First do guarenteed attacks without ambush
+          val preAmbush = doAttacks(noAmbushCandidates.sorted(spacePriority(false)), false)
+          // Next if we can to an special activity then add up to two ambush spaces (resources permitting)
+          val withAmbush = if (canDoSpecialActivity)
+            doAttacks(ambushCandidates.sorted(spacePriority(true)) take 2, true)
+          else
+            Nil
+          // Finally, if we a resource remaining and there is a candidate space with at least
+          // four guerrillas the attack there as well.
+          val completed  = preAmbush.toSet ++ withAmbush.toSet
+          val candidates = game.algerianSpaces filter (sp => !completed(sp.name) && with4Guerrillas(sp))
+          val postAmbush = doAttacks(candidates.sorted(spacePriority(false)) take 1, false)
+          (preAmbush.size + withAmbush.size + postAmbush.size)
+        }
+        
+        tryExtort()  // If did not already ambush and can do special activity
+        Right(effectiveAction(numSpaces))
+      }
+      else
+        Left(ConsiderRally)
     }
   }
 
   object ConsiderRally extends ActionFlowchartNode {
     val desc = "Consider Rally Operation"
-    def execute: Either[ActionFlowchartNode, Action] = Right(Pass)
+    def execute: Either[ActionFlowchartNode, Action] = {
+      Right(Pass)
+    }
   }
   
   object ConsiderMarch extends ActionFlowchartNode {
@@ -425,7 +559,7 @@ object Bot {
       botDebug(s"Bot Flowchart: $node")
       node.execute match {
         case Left(nextNode) => evaluateNode(nextNode)
-        case Right(action)  =>  action
+        case Right(action)  => action
       }
     }
     
@@ -435,9 +569,9 @@ object Bot {
   }
   
   val TerrorPriorities = List(
-    new CriteriaFilter("Remove support", sp => sp.isSupport),
-    new CriteriaFilter("Add terror to neutral in final campaign", sp => sp.isNeutral && game.terrorMarkersAvailable > 0),
-    new HighestScorePriority("Highest population", sp => sp.population))
+    CriteriaFilter("Remove support", sp => sp.isSupport),
+    CriteriaFilter("Add terror to neutral in final campaign", sp => sp.isNeutral && game.terrorMarkersAvailable > 0),
+    HighestScorePriority("Highest population", sp => sp.population))
   
   def doTerror(): Action = {
     def nextTerror(candidates: List[Space], num: Int): Int = {
