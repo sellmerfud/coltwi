@@ -87,12 +87,7 @@ object Human {
   object Train extends GovOp {
     override def toString() = "Train"
     
-    val trainFilter = (sp: Space) => {
-      if (game.pivotalCardsPlayed(PivotalRecallDeGaulle))
-        sp.isCity || sp.hasGovBase || (sp.isGovControlled && sp.pieces.totalTroops > 0 && sp.pieces.totalPolice > 0)
-      else
-        sp.isCity || sp.hasGovBase
-    }
+    val trainFilter = (sp: Space) => sp.canTrain
     
     // Override the default so we can add the France Track and Border Zone Track
     override def validSpaces(params: Params)(spaceFilter: (Space) => Boolean): Set[String] = {
@@ -536,7 +531,8 @@ object Human {
         false
       }
       else {
-        log("Government executes a Deploy special ability")
+        log()
+        log(s"$Gov executes a Deploy special ability")
         val choices = List(
           choice(canMove,                        "move",     "Deploy French pieces"),
           choice(getResettleCandidates.nonEmpty, "resettle", "Resettle an Algerian space"),
@@ -671,7 +667,8 @@ object Human {
           }
         }
         
-        log("\nGovernment executes a Troop Lift special ability")
+        log()
+        log(s"$Gov executes a Troop Lift special ability")
         log(s"May select up to ${maxSpaces} spaces")
         
         val selectedSpaces = selectSpaces(Nil).reverse
@@ -755,7 +752,8 @@ object Human {
           }
         }
         
-        log("\nGovernment executes a Neutralize special ability")
+        log()
+        log(s"$Gov executes a Neutralize special ability")
         if (capabilityInPlay(CapOverkill))
           log("The Overkill capability is in play: Up to four total pieces may be removed")
         else

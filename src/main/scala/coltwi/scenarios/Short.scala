@@ -33,6 +33,7 @@ import coltwi.ColonialTwilight._
 
 class Short extends Scenario {
   val name               = "Short: 1960-1962: The End Game"
+  val numberOfPropCards  = 3
   val resources          = Resources(gov = 20, fln = 15)
   val commitment         = 15
   val franceTrack        = franceTrackFromLetter('E')

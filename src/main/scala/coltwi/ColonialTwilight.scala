@@ -84,8 +84,13 @@ object ColonialTwilight {
   object Subvert extends FlnSpecial { override def toString() = "Subvert"}
   object Ambush  extends FlnSpecial { override def toString() = "Ambush"}
   
-  type EventConditions = Role => Boolean  // Used to see if Bot will execute the event.
-  type CardEvent       = Role => Unit
+  sealed trait EventSelection
+  case object NoEvent  extends EventSelection
+  case object Unshaded extends EventSelection
+  case object Shaded   extends EventSelection
+  
+  type BotEventSelector = () => EventSelection  // Used to see if Bot will execute the event.
+  type CardEvent        = Role => Unit
   
   // For cards that have only one event:
   //  dual == false and the event condtions and execution use the `unshaded` fields
@@ -94,9 +99,9 @@ object ColonialTwilight {
     val name: String,
     val dual: Boolean,
     val markedForFLN: Boolean,
-    val unshadedConditions: EventConditions,
-    val executeUshaded: CardEvent,
-    val shadedConditions: EventConditions,
+    val isCapability: Boolean,
+    val botEventSelection: BotEventSelector,
+    val executeUnshaded: CardEvent,
     val executeShaded: CardEvent) {
 
     def numAndName = s"#$number $name"
@@ -226,24 +231,23 @@ object ColonialTwilight {
   val TerrorMarker    = "Terror"
   
   // Capability Markers
-  val CapRevenge  = "FLN:Revenge"   // Place 1 Guerrilla after assault
-  val CapOverkill = "Gov:Overkill"  // Neutralize removes 4 pieces
-  val CapScorch   = "FLN:Scorch"    // Assault costs 3 resources/space
-  val CapNapalm   = "Gov:Napalm"    // Assault kill 1:1 in mountain spaces
-  val CapTaleb    = "FLN:Taleb"     // City Terror costs zero resources
-  val CapAmateurBomber = "Gov:Amateur Bomber"  // City Terror msut activate 2 guerrillas
-  val CapXWilayaCoord  = "FLN:X Wilaya Coord"  // Redeploy to any base (regarless of Wilayaf)
-  val CapDeadZone      = "Gov:Dead Zone"       // March is 1 space only
-  val CapFlnSaS        = "FLN:SAS"             // Assault is 1 space only
-  val CapGovSaS        = "Gov:SAS"             // Train may pacify in 1 or 2 spaces
-  val CapFlnCommandos  = "FLN:Zonal Commandos"  // Ambush does not activate a guerrilla
+  val CapRevenge       = "FLN:Revenge"             // Place 1 Guerrilla after assault
+  val CapOverkill      = "Gov:Overkill"            // Neutralize removes 4 pieces
+  val CapScorch        = "FLN:Scorch"              // Assault costs 3 resources/space
+  val CapNapalm        = "Gov:Napalm"              // Assault kill 1:1 in mountain spaces
+  val CapTaleb         = "FLN:Taleb"               // City Terror costs zero resources
+  val CapAmateurBomber = "Gov:Amateur Bomber"      // City Terror msut activate 2 guerrillas
+  val CapXWilayaCoord  = "FLN:X Wilaya Coord"      // Redeploy to any base (regarless of Wilayaf)
+  val CapDeadZone      = "Gov:Dead Zone"           // March is 1 space only
+  val CapFlnSaS        = "FLN:SAS"                 // Assault is 1 space only
+  val CapGovSaS        = "Gov:SAS"                 // Train may pacify in 1 or 2 spaces
+  val CapFlnCommandos  = "FLN:Zonal Commandos"     // Ambush does not activate a guerrilla
   val CapGovCommandos  = "Gov:Commandos de Chasse" // Each Algerian cube in mountain Sweep/Garrison activates 1 guerrilla
-  val CapOAS           = "Dual: SAS"
   val CapTorture       = "Dual: Torture"
 
   val AllCapabilities = List(
     CapRevenge, CapOverkill, CapScorch, CapNapalm, CapTaleb, CapAmateurBomber, CapXWilayaCoord,
-    CapDeadZone, CapFlnSaS, CapGovSaS, CapFlnCommandos, CapGovCommandos, CapOAS, CapTorture)
+    CapDeadZone, CapFlnSaS, CapGovSaS, CapFlnCommandos, CapGovCommandos, CapTorture)
     
   
   // Momentum markers  
@@ -307,6 +311,9 @@ object ColonialTwilight {
     val totalGov        = totalCubes       + govBases
     val totalFln        = totalGuerrillas  + flnBases
     val total           = totalGov         + totalFln
+    
+    val algerianCubes = algerianTroops + algerianPolice
+    val frenchCubes   = frenchTroops   + frenchPolice
     
     def stringItems = AllPieceTypes filter (numOf(_) > 0) map (t => amtPiece(numOf(t), t))
     
@@ -441,8 +448,8 @@ object ColonialTwilight {
     val nameAndZone = {
       val z = if (spaceType == Sector) s" $zone" else ""
       s"$name$z"
-    }  
-      
+    }
+          
     private val ZONE = """([^-]+)-.*""".r
     
     def walaya = zone match {
@@ -492,7 +499,7 @@ object ColonialTwilight {
     
     def isUncontrolled  = control == Uncontrolled
     def isGovControlled = control == GovControl
-    def isFlnConrolled  = control == FlnControl
+    def isFlnControlled = control == FlnControl
     
     def isNeutral = support == Neutral
     def isSupport = support == Support
@@ -503,6 +510,10 @@ object ColonialTwilight {
       
     def sweepHasEffect = pieces.hiddenGuerrillas > 0 &&
                          ((isMountains && pieces.totalCubes > 1) || (pieces.totalCubes > 0))
+    def canTrain = if (game.pivotalCardsPlayed(PivotalRecallDeGaulle))
+      isCity || hasGovBase || (isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0)
+    else
+      isCity || hasGovBase
     
   }
   
@@ -608,6 +619,7 @@ object ColonialTwilight {
   
   trait Scenario {
     val name: String
+    val numberOfPropCards: Int
     val resources: Resources
     val commitment: Int
     val franceTrack: Int
@@ -620,7 +632,7 @@ object ColonialTwilight {
     val additionalSetup: () => Unit = () => ()
   }
   
-  case class GameParameters(scenarioName: String, botLogging: Boolean = false)
+  case class GameParameters(scenarioName: String, botDebug: Boolean = false)
   
   sealed trait Action
   case object Pass               extends Action    { override def toString() = "Pass" }
@@ -633,8 +645,8 @@ object ColonialTwilight {
     Pass               -> List(Event, ExecOpPlusActivity, ExecOpOnly, ExecLimitedOp, Pass),
     Event              -> List(ExecOpPlusActivity, Pass),
     ExecOpPlusActivity -> List(Event, ExecLimitedOp, Pass),
-    ExecLimitedOp      -> List(ExecOpPlusActivity, ExecOpOnly, Pass),
-    ExecOpOnly         -> List(ExecLimitedOp, Pass)
+    ExecOpOnly         -> List(ExecLimitedOp, Pass),
+    ExecLimitedOp      -> List(ExecOpPlusActivity, ExecOpOnly, Pass)
   )
   
   case class SequenceOfPlay(
@@ -694,6 +706,7 @@ object ColonialTwilight {
   case class GameState(
     params: GameParameters,
     turn: Int,
+    numberOfPropCards: Int,
     spaces: List[Space],
     franceTrack: Int             = 0,
     borderZoneTrack: Int         = 0,
@@ -705,20 +718,23 @@ object ColonialTwilight {
     capabilities: List[String]   = Nil,
     momentum: List[String]       = Nil,
     currentCard: Option[Int]     = None,
+    propCardsPlayed: Int         = 0,
     pivotalCardsPlayed: Set[Int] = Set.empty,  // Coup d'Etat will be removed after each propaganda round
     coupdEtatPlayedOnce: Boolean = false,
     history: Vector[String]      = Vector.empty) {
     
     val algerianSpaces = spaces filterNot (_.isCountry)
+    val countrySpaces  = spaces filter (_.isCountry)
     
     val franceTrackLetter = ('A' + franceTrack).toChar
 
+    def isFinalCampaign = propCardsPlayed == (numberOfPropCards - 1)
     def govPivotalAvailable = deck.GovPivotalCards -- pivotalCardsPlayed
     def flnPivotalAvailable = deck.FlnPivotalCards -- pivotalCardsPlayed
     
     def govPivotalPlayable: Set[Int] = govPivotalAvailable filter {
       case PivotalCoupdEtat      => true
-      case PivotalMobilization   => calculateScore._1 >= 15
+      case PivotalMobilization   => flnScore >= 15
       case PivotalRecallDeGaulle => coupdEtatPlayedOnce
       case n => throw new IllegalStateException(s"Non gov pivotal card: $n") 
     }
@@ -767,12 +783,8 @@ object ColonialTwilight {
     
     def isPropRound = currentCard map deck.isPropagandaCard getOrElse false
     
-    // Return (Government Score, FLN Score)
-    def calculateScore: (Int, Int) = {
-      val govScore = totalOnMap(_.supportValue) + commitment
-      val flnScore = totalOnMap(_.opposeValue)  + totalOnMap(_.pieces.flnBases)
-      (govScore, flnScore)
-    }
+    def govScore = totalOnMap(_.supportValue) + commitment
+    def flnScore = totalOnMap(_.opposeValue)  + totalOnMap(_.pieces.flnBases)
     
     def scenarioSummary: Seq[String] = {
       val b = new ListBuffer[String]
@@ -787,7 +799,7 @@ object ColonialTwilight {
     }  
     
     def statusSummary: Seq[String] = {
-      val (gov, fln) = calculateScore
+      val (gov, fln) = (govScore, flnScore)
       val b = new ListBuffer[String]
       b += "Status"
       b += separator()
@@ -901,16 +913,7 @@ object ColonialTwilight {
   def capabilityInPlay(cap: String) = game.capabilities contains cap
   
   def momentumInPlay(mo: String) = game.momentum contains mo
-  
-  def placeGuerrillas(spaceName: String, num: Int): Unit = {
-    if (num > 0) {
-      assert(game.guerrillasAvailable >= num, s"placeGuerrillas($spaceName, $num): not enought available guerrillas")
-      val sp = game.getSpace(spaceName)
-      game = game.updatePieces(sp, sp.pieces + Pieces(hiddenGuerrillas = num))
-      log(s"Add ${hiddenG(num)} to $spaceName")
-    }
-  }
-  
+    
   def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.pieces.activateGuerrillas(num))
@@ -988,6 +991,15 @@ object ColonialTwilight {
     logSupportChange(sp, updated)
   }
   
+
+  def setSupport(name: String, newLevel: SupportValue): Unit = {
+    val sp = game.getSpace(name)
+    if (sp.support != newLevel) {
+      val updated = sp.copy(support = newLevel)
+      game = game.updateSpace(updated)
+      logSupportChange(sp, updated)
+    }
+  }
   
   def increaseSupport(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
@@ -1536,9 +1548,10 @@ object ColonialTwilight {
       readLine("Continue ↩︎ ")
   }
   
+  var echoLogging = true
   // Print the line to the console and save it in the game's history.
-  def log(line: String = "", echo: Boolean = true): Unit = {
-    if (echo)
+  def log(line: String = ""): Unit = {
+    if (echoLogging)
       println(line)
     game = game.copy(history = game.history :+ line)
   }
@@ -1577,6 +1590,7 @@ object ColonialTwilight {
     GameState(
       GameParameters(scenario.name),
       0, // Turn number, zero indicates start of game.
+      scenario.numberOfPropCards,
       spaces,
       scenario.franceTrack,
       scenario.borderZoneTrack,
@@ -1651,6 +1665,7 @@ object ColonialTwilight {
   // Process all top level user commands.
   @tailrec def mainLoop(): Unit = {
     val newSequence = if (game.isPropRound) {
+      game = game.copy(propCardsPlayed = game.propCardsPlayed + 1)
       resolvePropagandaCard()
       SequenceOfPlay()
     }
@@ -1691,7 +1706,7 @@ object ColonialTwilight {
   object BotCmd extends Command {
     val name = "fln"
     val desc = s"The FLN Bot acts on the current card"
-    val action = (_: Option[String]) => botAction()
+    val action = (_: Option[String]) => Bot.act()
   }
 
   object ShowCmd extends Command {
@@ -1736,7 +1751,7 @@ object ColonialTwilight {
                               |  adjust out of play   - Pieces in the out of play box
                               |  adjust capabilities  - Capabilities currently in play
                               |  adjust momentum      - Momentum events currently in play
-                              |  adjust bot logging   - Toggle logging of bot logic
+                              |  adjust bot debug     - Toggle debug output of bot logic
                               |  adjust <space>       - Space specific settings""".stripMargin
     val action = (param: Option[String]) => adjustSettings(param)
   }
@@ -1793,18 +1808,6 @@ object ColonialTwilight {
     }
   }
   
-  def humanPivot(role: Role): Unit = {
-    println("humanPivot() has not been implemented")
-  }
-  
-  def botAction(): Unit = {
-    val action = Pass
-    log(s"\nFLN chooses: $action")
-    performPass(Fln)
-    log(s"\nPlace the ${Fln} eligibility cylinder in the ${Pass} box")
-    game = game.copy(sequence = game.sequence.nextAction(action))
-  }
-
   def rollback(): Unit = {
     println("rollback has not been implemented")
   }
@@ -1812,6 +1815,7 @@ object ColonialTwilight {
   @tailrec def resolveEventCard(): Unit = {
     val card = deck(game.currentCard.get)
     // Check to see if the Bot will play the "Morocco and Tunisia Independent" pivotal event.
+    // FLN Bot never plays Suez Crisis or OAS pivotal events.
     val flnPivots = (game.pivotalCardsPlayed(PivotalMobilization)) &&
                     !(game.pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent)) &&
                     game.sequence.numActed == 0 &&
@@ -1945,7 +1949,7 @@ object ColonialTwilight {
   
   def adjustSettings(param: Option[String]): Unit = {
     val options = List("gov resources", "fln resources", "commitment", "france track", "border zone",
-                       "casualties", "out of play", "capabilities", "momentum", "bot logging"
+                       "casualties", "out of play", "capabilities", "momentum", "bot debug"
                        ).sorted ::: SpaceNames
 
     val choice = askOneOf("[Adjust] (? for list): ", options, param, allowNone = true, allowAbort = false)
@@ -1959,7 +1963,7 @@ object ColonialTwilight {
       case "out of play"   => adjustOutOfPlay()
       case "capabilities"  => adjustCapabilities()
       case "momentum"      => adjustMomentum()
-      case "bot logging"   => adjustBotLogging()
+      case "bot debug"     => adjustBotDebug()
       case name            => adjustSpace(name)
     }
   }
@@ -2281,7 +2285,8 @@ object ColonialTwilight {
     val newState = askMenu(choices, allowAbort = false).head
     if (newState != sp.support) {
       logAdjustment(name, "Support", sp.support, newState)
-      game = game.updateSpace(sp.copy(support = newState))
+      val updated = sp.copy(support = newState)
+      game = game.updateSpace(updated)
       saveAdjustment(name, "Support")
     }
   }
@@ -2360,11 +2365,11 @@ object ColonialTwilight {
     }
   }
   
-  def adjustBotLogging(): Unit = {
-    val newValue = !game.params.botLogging
-    logAdjustment("Bot logging", game.params.botLogging, newValue)
-    game = game.copy(params = game.params.copy(botLogging = newValue))
-    saveAdjustment("Bot logging")
+  def adjustBotDebug(): Unit = {
+    val newValue = !game.params.botDebug
+    logAdjustment("Bot debug", game.params.botDebug, newValue)
+    game = game.copy(params = game.params.copy(botDebug = newValue))
+    saveAdjustment("Bot debug")
   }
   
   
