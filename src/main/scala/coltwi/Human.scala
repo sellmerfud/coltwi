@@ -517,12 +517,10 @@ object Human {
     override def execute(params: Params): Boolean = {
       val canMove = {
         val candidates = getMoveCandidates
-        candidates.nonEmpty && availPieces.total > 0 && {
-          val mapPieces = spaces(candidates).foldLeft(0) { 
-            case (sum, sp) => sum + sp.only(List(FrenchTroops, FrenchPolice, GovBases)).total
-          }
-          mapPieces > 0
+        val mapPieces  = spaces(candidates).foldLeft(0) { 
+          case (sum, sp) => sum + sp.totalOf(List(FrenchTroops, FrenchPolice, GovBases))
         }
+        candidates.nonEmpty && (availPieces.total > 0 || mapPieces > 0)
       }
       
       if (canMove == false && getResettleCandidates.isEmpty) {
@@ -574,6 +572,7 @@ object Human {
       }
       
       val FrenchPieces = List(FrenchTroops, FrenchPolice, GovBases)
+      val FrenchCubes  = List(FrenchTroops, FrenchPolice)
       val AB = "Available box"
       val deploySpaces = AB :: selectSpaces(Nil, getMoveCandidates).reverse
       var deployed: Map[String, Pieces] = Map.empty.withDefaultValue(Pieces())
@@ -584,7 +583,9 @@ object Human {
         if askYorN(s"Deploy pieces out of $src (y/n) ")
         dest <- deploySpaces filterNot (_ == src)
       } {
-        val srcPieces = if (src == AB) availPieces else game.getSpace(src).only(FrenchPieces) - deployed(src)
+        val validTypes = if (game.getSpace(dest).totalBases == 2) FrenchCubes else FrenchPieces 
+        val srcPieces = if (src == AB) availPieces.only(validTypes) 
+                        else           game.getSpace(src).only(validTypes) - deployed(src)
         if (srcPieces.total > 0 && numDeployed < 6) {
           val num = askInt(s"Deploy how many pieces from $src to $dest", 0, srcPieces.total min (6 - numDeployed))
           if (num > 0) {
