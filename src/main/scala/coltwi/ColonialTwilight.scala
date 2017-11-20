@@ -492,6 +492,7 @@ object ColonialTwilight {
                      else basePop
     
     def maxBases = if (hasMarker(Plus1BaseMarker)) 3 else 2
+    def canTakeBase = pieces.totalBases < maxBases
     def hasGovBase = pieces.govBases > 0
     def hasFlnBase = pieces.flnBases > 0
 
