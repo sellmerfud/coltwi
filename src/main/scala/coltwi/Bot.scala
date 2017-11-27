@@ -46,9 +46,16 @@ object Bot {
   case class TurnState(
     rallyConsidered: Boolean          = false,
     marchConsidered: Boolean          = false,
+    specialActivityAllowed: Boolean   = false,
     specialActivityTaken: Boolean     = false,
+    freeOperation: Boolean            = false,
+    maxSpaces: Option[Int]            = None,  // None == unlimited
     movingGroups: Map[String, Pieces] = Map.empty.withDefaultValue(Pieces())
   ) {
+    
+    val multipleSpaces       = (maxSpaces getOrElse 1) > 1
+    val canDoSpecialActivity = specialActivityAllowed && !specialActivityTaken
+    
     def addMovingGroup(name: String, pieces: Pieces): TurnState =
       copy(movingGroups = movingGroups + (name -> (movingGroups(name) + pieces)))
     def removeMovingGroup(name: String, pieces: Pieces): TurnState =
@@ -201,9 +208,6 @@ object Bot {
        game.sequence.firstAction == Some(ExecOpOnly))
 
   def botCanDo(action: Action): Boolean = game.sequence.availableActions contains action
-  def canDoMultipleSpaces = botCanDo(ExecOpPlusActivity) || botCanDo(ExecOpOnly)
-  
-  def canDoSpecialActivity = botCanDo(ExecOpPlusActivity) && !turnState.specialActivityTaken
   
   // Return the effective action based on what was performed
   def effectiveAction(numSpaces: Int): Action = {
@@ -277,7 +281,7 @@ object Bot {
   }
   
   // Note that no guerrillas are activated when subverting
-  def trySubvert(): Unit = if (canDoSpecialActivity) {
+  def trySubvert(): Unit = if (turnState.canDoSpecialActivity) {
     subvertCommands match {
       case Nil =>
       case cmds =>
@@ -292,7 +296,7 @@ object Bot {
     }
   }
   
-  def tryExtort(protectedGuerrillas: List[(String, Int)] = Nil): Unit = if (canDoSpecialActivity && game.resources(Fln) < 5) {
+  def tryExtort(protectedGuerrillas: List[(String, Int)] = Nil): Unit = if (turnState.canDoSpecialActivity && game.resources(Fln) < 5) {
     val protectedGs = protectedGuerrillas.toMap.withDefaultValue(0)
     def hasSafeHiddenGuerrilla(sp: Space) = 
       ((sp.flnBases == 0 || sp.isCountry) && sp.hiddenGuerrillas > protectedGs(sp.name)) ||
@@ -331,13 +335,13 @@ object Bot {
     override def toString() = desc
     // If an ActionFlowchartNode  is returned, then we continue down the flowchart
     // If a GameState is returned, then an action has been peformed.
-    def execute: Either[ActionFlowchartNode, Action]
+    def execute(): Either[ActionFlowchartNode, Action]
   }
 
   // This is the starting point FLN Bot flowchart
   object BotPasses extends ActionFlowchartNode {
     val desc = "FLN Bot chooses to pass"
-    def execute: Either[ActionFlowchartNode, Action] = {
+    def execute(): Either[ActionFlowchartNode, Action] = {
       log(s"\nFLN chooses: ${Pass}")
       performPass(Fln)
       Right(Pass)
@@ -347,8 +351,8 @@ object Bot {
   // This is the starting point FLN Bot flowchart
   object LimOpAndZeroResources extends ActionFlowchartNode {
     val desc = "LimOp and Resources == 0?"
-    def execute: Either[ActionFlowchartNode, Action] = {
-      if (game.resources(Fln) == 0 && !canDoMultipleSpaces)
+    def execute(): Either[ActionFlowchartNode, Action] = {
+      if (game.resources(Fln) == 0 && !turnState.multipleSpaces)
         Left(BotPasses)
       else
         Left(EachAlgerianBaseHasUnderground)
@@ -357,7 +361,7 @@ object Bot {
   
   object EachAlgerianBaseHasUnderground extends ActionFlowchartNode {
     val desc = "Each Algerian Base at +1 Pop has 2+ underground guerrillas...?"
-    def execute: Either[ActionFlowchartNode, Action] = {
+    def execute(): Either[ActionFlowchartNode, Action] = {
       val basesCovered = (game.algerianSpaces filter (_.flnBases > 0)) forall { sp => 
         (sp.population == 0 && sp.hiddenGuerrillas > 0) ||
         (sp.population > 0  && sp.hiddenGuerrillas > 1)
@@ -371,7 +375,7 @@ object Bot {
 
   object WillActTwice extends ActionFlowchartNode {
     val desc = "Gov already active and will be 2nd eligible next card?"
-    def execute: Either[ActionFlowchartNode, Action] = 
+    def execute(): Either[ActionFlowchartNode, Action] = 
       if (botWillActTwice) Left(ConsiderTerrorOrEvent) else Left(ConsiderRally)
   }
 
@@ -383,7 +387,7 @@ object Bot {
     //     CONSIDER the event.
     // If event not playable and terror not possible, the next node: ConsiderAttack
     // If event not playable or worse than terror then do Terror.
-    def execute: Either[ActionFlowchartNode, Action] = {
+    def execute(): Either[ActionFlowchartNode, Action] = {
       val originalGameState = game
       val card = deck(game.currentCard.get)
       
@@ -446,11 +450,11 @@ object Bot {
   
   def doTerror(): Action = {
     def nextTerror(candidates: List[Space], num: Int): Int = {
-      if (candidates.isEmpty || (num == 1 && !canDoMultipleSpaces))
+      if (candidates.isEmpty || (num == 1 && !turnState.multipleSpaces))
         num
       else {
         val target = topPriority(candidates, TerrorPriorities)
-        val isFree = target.isCity && capabilityInPlay(CapEffectiveBomber)
+        val isFree = turnState.freeOperation || (target.isCity && capabilityInPlay(CapEffectiveBomber))
         
         if (!isFree && game.resources(Fln) == 0)
           tryExtort()
@@ -525,7 +529,8 @@ object Bot {
       if (ambush) {
         log()
         log(s"$Fln executes Attack operation with ambush: $name")
-        decreaseResources(Fln, 1)
+        if (!turnState.freeOperation)
+          decreaseResources(Fln, 1)
         activateHiddenGuerrillas(name, 1)
         removeLosses(name, attackLosses(sp.pieces, ambush))
       }
@@ -565,7 +570,7 @@ object Bot {
     }
     
     // Must be able to kill at least two government pieces total.
-    def execute: Either[ActionFlowchartNode, Action] = {
+    def execute(): Either[ActionFlowchartNode, Action] = {
       val hasGov          = (sp: Space) => sp.totalCubes > 0 || sp.govBases > 0
       val noAmbush        = (sp: Space) => sp.flnBases == 0 && sp.totalGuerrillas >= 6 && hasGov(sp)
       val withAmbush      = (sp: Space) => hasSafeHiddenGuerrilla(sp) && hasGov(sp)
@@ -580,18 +585,20 @@ object Bot {
       // Bot does not extort to pay for attacks
       // With only one resource there must be a space with 6+ guerrillas (and no base)
       // and at least two government pieces.
-      val canKillAtLeastTwo = game.resources(Fln) match {
-        case 0                         => false
-        case 1                         => noAmbushKillTwoCandidates.nonEmpty
-        case _ if !canDoMultipleSpaces => noAmbushKillTwoCandidates.nonEmpty // LimOp
-        case _ if canDoSpecialActivity => noAmbushCandidates.size + ambushCandidates.size > 1
-        case _                         => noAmbushCandidates.size > 1
+      val effectiveSpaces = (turnState.maxSpaces getOrElse 3) min (if (turnState.freeOperation) 3 else game.resources(Fln))
+      val canKillAtLeastTwo = effectiveSpaces match {
+        case 0                                   => false
+        case 1                                   => noAmbushKillTwoCandidates.nonEmpty
+        case _ if !turnState.multipleSpaces      => noAmbushKillTwoCandidates.nonEmpty // LimOp
+        case _ if turnState.canDoSpecialActivity => noAmbushCandidates.size + ambushCandidates.size > 1
+        case _                                   => noAmbushCandidates.size > 1
       }
       
+      val oneResourceOnly = !turnState.freeOperation && game.resources(Fln) == 1
       if (canKillAtLeastTwo) {
         log()
         log(s"$Fln chooses: Attack")
-        val numSpaces = if (game.resources(Fln) == 1 || !canDoMultipleSpaces) {
+        val numSpaces = if (!turnState.multipleSpaces || oneResourceOnly) {
           val target = noAmbushKillTwoCandidates.sorted(spacePriority(false)).head
           attackInSpace(target.name, false)
           1
@@ -599,8 +606,8 @@ object Bot {
         else {
           def doAttacks(candidates: List[Space], ambush: Boolean): List[String] = {
             candidates match {
-              case Nil                           => Nil
-              case _ if game.resources(Fln) == 0 => Nil
+              case Nil => Nil
+              case _ if game.resources(Fln) == 0 && !turnState.freeOperation => Nil
               case t::ts =>
                 attackInSpace(t.name, ambush)
                 t.name :: doAttacks(ts, ambush)
@@ -610,7 +617,7 @@ object Bot {
           // First do guarenteed attacks without ambush
           val preAmbush = doAttacks(noAmbushCandidates.sorted(spacePriority(false)), false)
           // Next if we can to an special activity then add up to two ambush spaces (resources permitting)
-          val withAmbush = if (canDoSpecialActivity)
+          val withAmbush = if (turnState.canDoSpecialActivity)
             doAttacks(ambushCandidates.sorted(spacePriority(true)) take 2, true)
           else
             Nil
@@ -696,7 +703,7 @@ object Bot {
     }
       
 
-    def execute: Either[ActionFlowchartNode, Action] = if (turnState.rallyConsidered)
+    def execute(): Either[ActionFlowchartNode, Action] = if (turnState.rallyConsidered)
       Left(BotPasses)
     else {
       val supportCity = (sp: Space) => sp.isCity && sp.isSupport
@@ -705,7 +712,7 @@ object Bot {
                                             (sp.isCountry || sp.flnBases == 0) &&
                                             sp.totalCubes == 0 &&
                                             sp.totalGuerrillas >= 3
-      val minGWithCubes = if (canDoMultipleSpaces) 4 else 3
+      val minGWithCubes = if (turnState.multipleSpaces) 4 else 3
       val placeBaseWithCubes = (sp: Space) => !supportCity(sp)  &&
                                               sp.canTakeBase    &&
                                               sp.totalCubes > 0 &&
@@ -750,9 +757,9 @@ object Bot {
       var shiftedFranceTrack = false
       var agitateSpace: Option[String] = None
       var reservedResources = 0
-      val maxTotalRallies = if (!canDoMultipleSpaces)         1
-                            else if (game.resources(Fln) < 9) 1000 // No limit
-                            else                              game.resources(Fln) * 2 / 3
+      val maxTotalRallies = if (!turnState.multipleSpaces)                               1
+                            else if (game.resources(Fln) < 9 || turnState.freeOperation) 1000 // No limit
+                            else                                                         game.resources(Fln) * 2 / 3
       
       def numRallies  = rallySpaces.size + (if (shiftedFranceTrack) 1 else 0)
       def canContinue = numRallies < maxTotalRallies 
@@ -775,6 +782,16 @@ object Bot {
         else
           false
       }
+      
+      def haveAResource(): Boolean = {
+        if (turnState.freeOperation)
+          true
+        else {
+          if (game.resources(Fln) == reservedResources)
+            tryExtort()
+          game.resources(Fln) > reservedResources
+        }
+      }
         
       
       if (canPlaceBase || ((game.totalOnMap(_.flnBases) * 2) > (guerrillasWithBases + dieRoll/2))) {
@@ -783,11 +800,6 @@ object Bot {
         
         def doRallies(candidates: List[String], rallyType: RallyType, priorities: SpacePriorities, 
                         force: Boolean = false, numRemaining: Int = 1000): Unit = {
-          def haveAResource(): Boolean = {
-            if (game.resources(Fln) == reservedResources)
-              tryExtort()
-            game.resources(Fln) > reservedResources
-          }
           
           if (candidates.nonEmpty && canContinue) {
             // Note that we fetch the spaces from the current game state each time
@@ -797,14 +809,16 @@ object Bot {
                 if (force && haveAResource()) {
                   log()
                   log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
-                  decreaseResources(Fln, 1)
+                  if (!turnState.freeOperation)
+                    decreaseResources(Fln, 1)
                   rallySpaces += sp.name
                 }
               case PlaceBase =>
                 if (haveAResource()) {
                   log()
                   log(s"$Fln executes Rally operation: ${sp.name}")
-                  decreaseResources(Fln, 1)
+                  if (!turnState.freeOperation)
+                    decreaseResources(Fln, 1)
                   val numActive = 2 min sp.activeGuerrillas
                   val numHidden = 2 - numActive
                   removeToAvailableFrom(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden))
@@ -826,7 +840,8 @@ object Bot {
                     if (haveAResource()) {
                       log()
                       log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
-                      decreaseResources(Fln, 1)
+                      if (!turnState.freeOperation)
+                        decreaseResources(Fln, 1)
                       rallySpaces += sp.name
                     }
                     
@@ -834,7 +849,8 @@ object Bot {
                     if (numToPlace == 0 && sp.activeGuerrillas > 0 && haveAResource()) {
                       log()
                       log(s"$Fln executes Rally operation: ${sp.name}")
-                      decreaseResources(Fln, 1)
+                      if (!turnState.freeOperation)
+                        decreaseResources(Fln, 1)
                       hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
                       rallySpaces += sp.name
                     }
@@ -843,7 +859,8 @@ object Bot {
                     if (haveAResource()) {
                       log()
                       log(s"$Fln executes Rally operation: ${sp.name}")
-                      decreaseResources(Fln, 1)
+                      if (!turnState.freeOperation)
+                        decreaseResources(Fln, 1)
                       fromMap foreach { case ToPlace(n, name) => removeToAvailableFrom(name, Pieces(activeGuerrillas = n)) }
                       placePieces(sp.name, Pieces(hiddenGuerrillas = numToPlace min game.guerrillasAvailable))
                       rallySpaces += sp.name
@@ -860,16 +877,13 @@ object Bot {
         val unprotectedBaseCandidates = spaceNames(game.spaces filter (sp => (!hasRallied(sp.name) && unprotectedBase(sp))))
         doRallies(unprotectedBaseCandidates, PlaceGuerrillas, UnprotectedBasePriorities)
         // France track?
-        if (game.franceTrack < FranceTrackMax && canContinue) {
-          if (game.resources(Fln) == 0)
-            tryExtort()
-          if (game.resources(Fln) > 0) {
-            log()
-            log(s"$Fln executes Rally operation: France Track")
+        if (game.franceTrack < FranceTrackMax && canContinue && haveAResource()) {
+          log()
+          log(s"$Fln executes Rally operation: France Track")
+          if (!turnState.freeOperation)
             decreaseResources(Fln, 1)
-            increaseFranceTrack(1)
-            shiftedFranceTrack = true
-          }
+          increaseFranceTrack(1)
+          shiftedFranceTrack = true
         }
         val supportSectorCandidates = spaceNames(game.spaces filter (sp => (!hasRallied(sp.name) && sectorsAtSupport(sp))))
         doRallies(supportSectorCandidates, PlaceGuerrillas, SupportSectorPriorities)
@@ -1199,14 +1213,14 @@ object Bot {
       ToRemoveGovControl,
       MarchThreeToZeroPop)
     
-    def execute: Either[ActionFlowchartNode, Action] = if (turnState.marchConsidered)
+    def execute(): Either[ActionFlowchartNode, Action] = if (turnState.marchConsidered)
       Left(BotPasses)
     else {
       def ALL = 1000  // Unlimited march targets
       var marchDestinations = Set.empty[String]
-      val maxTotalDestinations = if (!canDoMultipleSpaces)         1
-                                 else if (game.resources(Fln) < 9) 1000 // No limit
-                                 else                              game.resources(Fln) * 2 / 3
+      val maxTotalDestinations = if (!turnState.multipleSpaces)                               1
+                                 else if (game.resources(Fln) < 9 || turnState.freeOperation) 1000 // No limit
+                                 else                                                         game.resources(Fln) * 2 / 3
             
       // Try to execute each
       def doMarches(marchType: MarchType, numTargets: Int, candidates: List[MarchDest]): Unit = {
@@ -1220,9 +1234,7 @@ object Bot {
                 log(s"$Fln chooses: March")
               }
             
-              if (game.resources(Fln) < cost) {
-                case class ResolvedMarch(path: MarchPath, guerrillas: Pieces)
-              
+              if (game.resources(Fln) < cost && !turnState.freeOperation) {
                 // Protect hidden guerrillas from exort if necessary
                 val protectedGuerrillas = if (marchType.hiddenOnly)
                   resolved.marches map (m => (m.path.source, m.guerrillas.hiddenGuerrillas))
@@ -1231,7 +1243,7 @@ object Bot {
                 tryExtort(protectedGuerrillas)
               }
             
-              if (game.resources(Fln) >= cost) {
+              if (game.resources(Fln) >= cost || turnState.freeOperation) {
                 val newSpaces = (resolved.marchSpaces -- marchDestinations).toList.sorted
                 if (newSpaces.nonEmpty) {
                   log()
@@ -1241,7 +1253,8 @@ object Bot {
                     log(s"$Fln selects March space: ${newSpaces.toList.head}")
                 }
             
-                decreaseResources(Fln, cost)
+                if (!turnState.freeOperation)
+                  decreaseResources(Fln, cost)
               
                 var hiddenArrived = false
                 // Recalcuate the marcher on each path because some of them may have
@@ -1462,7 +1475,7 @@ object Bot {
       // There may be more than one possible path of travel.  Remove any that would
       // activate guerrillas if we are only interested in hidden guerrillas.
       // Later we will pick the least costly among the multiple paths.
-      val inWilaya = if (!canDoMultipleSpaces || capabilityInPlay(CapDeadZones))
+      val inWilaya = if (!turnState.multipleSpaces || capabilityInPlay(CapDeadZones))
         Nil  // Cannot make multiple marches to reach destination
       else
         for {
@@ -1499,11 +1512,13 @@ object Bot {
 
   
   def act(): Unit = {
-    turnState = TurnState()
+    turnState = TurnState(
+      specialActivityAllowed = botCanDo(ExecOpPlusActivity),
+      maxSpaces              = if (botCanDo(ExecOpPlusActivity) || botCanDo(ExecOpOnly)) None else Some(1))
     
     @tailrec def evaluateNode(node: ActionFlowchartNode): Action = {
       botDebug(s"Bot Flowchart: $node")
-      node.execute match {
+      node.execute() match {
         case Left(nextNode) => evaluateNode(nextNode)
         case Right(action)  => action
       }
