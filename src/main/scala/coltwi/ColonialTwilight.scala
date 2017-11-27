@@ -37,6 +37,9 @@ import scala.collection.mutable.ListBuffer
 import scala.io.StdIn.readLine
 import scala.language.implicitConversions
 import scenarios._
+import FUtil.Pathname
+// import Pickling.{ loadGameState, saveGameState }
+
 
 object ColonialTwilight {
   
@@ -1617,9 +1620,7 @@ object ColonialTwilight {
       scenario.additionalSetup()
       saveTurn()  // Save the initial game state as turn-0
       saveGameDescription(turnsCompleted = 0)
-      
       game = game.copy(turn = game.turn + 1)
-      // Draw the first two cards
       println()
       drawCard("Enter the card # of the first card: ")
       mainLoop()
@@ -1641,7 +1642,12 @@ object ColonialTwilight {
   def drawCard(prompt: String): Unit = {
     val cardNum = askCardNumber(prompt)
     game = game.copy(currentCard = Some(cardNum))
+    log()
+    log(s"Turn #${game.turn}")
+    log(separator(char = '='))
     log(s"Card played: ${deck(cardNum)}")
+    log(s"${game.sequence.firstEligible} is first eligible")
+    log(separator(char = '='))
   }
   
   // ---------------------------------------------
@@ -1887,8 +1893,87 @@ object ColonialTwilight {
   }
 
 
-  def history(param: Option[String]): Unit = {
-    println("The history command has not been implemented")
+  // Display some or all of the game log.
+  // usage:
+  //   history        ##  Shows the log from the beginning of the current turn
+  //   history -1     ##  Shows the log from the beginning of the previous turn
+  //   history -n     ##  Shows the log from the beginning of the turn n turns ago
+  //   history 1      ##  Shows the log for the first turn
+  //   history n      ##  Shows the log for the nth turn
+  //   history 1..3   ##  Shows the log for the first through third turns
+  //   history 5..    ##  Shows the log from the fifth turn through the end
+  //   history ..5    ##  Shows the log from the beginning through the fifth turn
+  //   history all    ##  Shows the entire log
+  def history(input: Option[String]): Unit = {
+    val POS = """(\d+)""".r
+    val NEG = """-(\d+)""".r
+    val PRE = """\.\.(\d+)""".r
+    val SUF = """(\d+)\.\.""".r
+    val RNG = """(\d+)\.\.(\d+)""".r
+    val ALL = "all"
+    case class Error(msg: String) extends Exception
+    try {
+      def redirect(tokens: List[String]): Option[String] = {
+        tokens match {
+          case Nil => None
+          case x::xs  if !(x startsWith ">") => None
+          case ">":: Nil => throw Error("No filename specified after '>'")
+          case ">"::file::xs => Some(file)
+          case file::xs => Some(file drop 1)
+        }
+      }
+      
+      val tokens = (input getOrElse "" split "\\s+").toList map (_.toLowerCase) dropWhile (_ == "")
+      val (param, file) = if (tokens.isEmpty)
+        (None, None)
+      else if (!(tokens.head startsWith ">"))
+          (tokens.headOption, redirect(tokens.tail))
+      else
+        (None, redirect(tokens))
+    
+      def normalize(n: Int) = 0 max n min (game.turn + 1)
+      val START = 0
+      val END   = game.turn + 1
+      val (start, end) = param match {
+        case None                                   => (game.turn, game.turn + 1)
+        case Some(POS(n))                           => (normalize(n.toInt), normalize(n.toInt + 1))
+        case Some(NEG(n))                           => (normalize(game.turn - n.toInt), END)
+        case Some(PRE(e))                           => (START, normalize(e.toInt + 1))
+        case Some(SUF(s))                           => (normalize(s.toInt), END)
+        case Some(RNG(s, e)) if (e.toInt < s.toInt) => (normalize(e.toInt), normalize(s.toInt + 1))
+        case Some(RNG(s, e))                        => (normalize(s.toInt), normalize(e.toInt + 1))
+        case Some("all" | "al" | "a")               => (START, END)
+        case Some(p)                                => throw Error(s"Invalid parameter: $p")
+      }
+      
+      val SOT = """Turn #\s*(\d+)""".r
+      def turnIndex(num: Int): Int = {
+        val turnMatch = (x: String) => x match {
+          case SOT(n) if n.toInt == num => true
+          case _ => false
+        }
+        if (num == 0)             0
+        else if (num > game.turn) game.history.size
+        else                      game.history indexWhere turnMatch
+      } 
+      val ignore = turnIndex(start)
+      val length = turnIndex(end) - ignore
+      val logs = game.history drop ignore take length
+      file match {
+        case None => logs foreach println
+        case Some(fname) =>
+          Pathname(fname).writer { w =>
+            logs foreach { log =>
+              w.write(log)
+              w.write(lineSeparator)
+            }
+          }
+      }
+    }
+    catch {
+      case e: IOException => println(s"IOException: ${e.getMessage}")
+      case Error(msg) => println(msg)
+    }
   }
   
   def showCommand(param: Option[String]): Unit = {

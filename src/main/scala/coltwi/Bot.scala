@@ -53,7 +53,7 @@ object Bot {
     movingGroups: Map[String, Pieces] = Map.empty.withDefaultValue(Pieces())
   ) {
     
-    val multipleSpaces       = (maxSpaces getOrElse 1) > 1
+    val multipleSpaces       = maxSpaces map (_ > 1) getOrElse true
     val canDoSpecialActivity = specialActivityAllowed && !specialActivityTaken
     
     def addMovingGroup(name: String, pieces: Pieces): TurnState =
