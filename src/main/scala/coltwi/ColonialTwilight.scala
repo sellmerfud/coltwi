@@ -177,51 +177,40 @@ object ColonialTwilight {
   val Tunisia          = "Tunisia"            // Country, pop 1, plains
   
   
-  // Sorts alphabetically, but puts France track and Border zone track at the front.
- val TrainingSpaceOrdering = new Ordering[String] {
-    def compare(x: String, y: String) = (x, y) match {
-      case (FranceTrackName, _)     => -1
-      case (_, FranceTrackName)     => 1
-      case (BorderZoneTrackName, _) => -1
-      case (_, BorderZoneTrackName) => 1
-      case (_, _)                   => x compare y
-    }
-  }
-  
   // A space name and a list of adjacent space names
-  val adjacencyMap: Map[String, List[String]] = Map(
-    Barika           -> (Biskra::SidiAissa::BordjBouArreridj::Setif::Philippeville::OumElBouaghi::Batna::Nil),
-    Batna            -> (Biskra::Barika::OumElBouaghi::Negrine::Nil),
-    Biskra           -> (Laghouat::SidiAissa::Barika::Batna::Negrine::Tunisia::Nil),
-    OumElBouaghi     -> (Batna::Barika::Philippeville::SoukAhras::Tebessa::Negrine::Nil),
-    Tebessa          -> (Negrine::OumElBouaghi::SoukAhras::Tunisia::Nil),
-    Negrine          -> (Biskra::Batna::OumElBouaghi::Tebessa::Tunisia::Nil),
-    Constantine      -> (Setif::Philippeville::Nil),
-    Setif            -> (Constantine::Philippeville::Barika::BordjBouArreridj::Bougie::Nil),
-    Philippeville    -> (Constantine::SoukAhras::OumElBouaghi::Barika::Setif::Nil),
-    SoukAhras        -> (Philippeville::Tunisia::Tebessa::OumElBouaghi::Nil),
-    TiziOuzou        -> (Bougie::BordjBouArreridj::Medea::Nil),
-    BordjBouArreridj -> (Bougie::Setif::Barika::SidiAissa::Medea::TiziOuzou::Nil),
-    Bougie           -> (TiziOuzou::Setif::BordjBouArreridj::Nil),
-    Algiers          -> (Medea::Nil),
-    Medea            -> (Algiers::TiziOuzou::BordjBouArreridj::SidiAissa::AinOussera::OrleansVille::Nil),
-    OrleansVille     -> (Medea::AinOussera::Tiaret::Mostaganem::Nil),
-    Oran             -> (SidiBelAbbes::Nil),
-    Mecheria         -> (Morocco::Tlemcen::Saida::AinSefra::Nil),
-    Tlemcen          -> (Morocco::SidiBelAbbes::Saida::Mecheria::Nil),
-    SidiBelAbbes     -> (Oran::Tlemcen::Mostaganem::Mascara::Saida::Nil),
-    Mostaganem       -> (SidiBelAbbes::OrleansVille::Tiaret::Mascara::Nil),
-    Saida            -> (Mecheria::Tlemcen::SidiBelAbbes::Mascara::AinSefra::Nil),
-    Mascara          -> (Saida::SidiBelAbbes::Mostaganem::Tiaret::AinSefra::Nil),
-    Tiaret           -> (Mascara::Mostaganem::OrleansVille::AinOussera::AinSefra::Nil),
-    AinSefra         -> (Morocco::Mecheria::Saida::Mascara::Tiaret::AinOussera::Laghouat::Nil),
-    Laghouat         -> (AinSefra::AinOussera::SidiAissa::Biskra::Nil),
-    SidiAissa        -> (Biskra::Laghouat::AinOussera::Medea::BordjBouArreridj::Barika::Nil),
-    AinOussera       -> (Laghouat::AinSefra::Tiaret::OrleansVille::Medea::SidiAissa::Nil),
-    Morocco          -> (Tlemcen::Mecheria::AinSefra::Nil),
-    Tunisia          -> (SoukAhras::Tebessa::Negrine::Biskra::Nil))
+  val adjacencyMap: Map[String, Set[String]] = Map(
+    Barika           -> Set(Biskra, SidiAissa, BordjBouArreridj, Setif, Philippeville, OumElBouaghi, Batna),
+    Batna            -> Set(Biskra, Barika, OumElBouaghi, Negrine),
+    Biskra           -> Set(Laghouat, SidiAissa, Barika, Batna, Negrine, Tunisia),
+    OumElBouaghi     -> Set(Batna, Barika, Philippeville, SoukAhras, Tebessa, Negrine),
+    Tebessa          -> Set(Negrine, OumElBouaghi, SoukAhras, Tunisia),
+    Negrine          -> Set(Biskra, Batna, OumElBouaghi, Tebessa, Tunisia),
+    Constantine      -> Set(Setif, Philippeville),
+    Setif            -> Set(Constantine, Philippeville, Barika, BordjBouArreridj, Bougie),
+    Philippeville    -> Set(Constantine, SoukAhras, OumElBouaghi, Barika, Setif),
+    SoukAhras        -> Set(Philippeville, Tunisia, Tebessa, OumElBouaghi),
+    TiziOuzou        -> Set(Bougie, BordjBouArreridj, Medea),
+    BordjBouArreridj -> Set(Bougie, Setif, Barika, SidiAissa, Medea, TiziOuzou),
+    Bougie           -> Set(TiziOuzou, Setif, BordjBouArreridj),
+    Algiers          -> Set(Medea),
+    Medea            -> Set(Algiers, TiziOuzou, BordjBouArreridj, SidiAissa, AinOussera, OrleansVille),
+    OrleansVille     -> Set(Medea, AinOussera, Tiaret, Mostaganem),
+    Oran             -> Set(SidiBelAbbes),
+    Mecheria         -> Set(Morocco, Tlemcen, Saida, AinSefra),
+    Tlemcen          -> Set(Morocco, SidiBelAbbes, Saida, Mecheria),
+    SidiBelAbbes     -> Set(Oran, Tlemcen, Mostaganem, Mascara, Saida),
+    Mostaganem       -> Set(SidiBelAbbes, OrleansVille, Tiaret, Mascara),
+    Saida            -> Set(Mecheria, Tlemcen, SidiBelAbbes, Mascara, AinSefra),
+    Mascara          -> Set(Saida, SidiBelAbbes, Mostaganem, Tiaret, AinSefra),
+    Tiaret           -> Set(Mascara, Mostaganem, OrleansVille, AinOussera, AinSefra),
+    AinSefra         -> Set(Morocco, Mecheria, Saida, Mascara, Tiaret, AinOussera, Laghouat),
+    Laghouat         -> Set(AinSefra, AinOussera, SidiAissa, Biskra),
+    SidiAissa        -> Set(Biskra, Laghouat, AinOussera, Medea, BordjBouArreridj, Barika),
+    AinOussera       -> Set(Laghouat, AinSefra, Tiaret, OrleansVille, Medea, SidiAissa),
+    Morocco          -> Set(Tlemcen, Mecheria, AinSefra),
+    Tunisia          -> Set(SoukAhras, Tebessa, Negrine, Biskra))
   
-  def getAdjacent(name: String): List[String] = adjacencyMap(name)
+  def getAdjacent(name: String): Set[String] = adjacencyMap(name)
   def areAdjacent(name1: String, name2: String) = getAdjacent(name1) contains name2
   
   
@@ -232,23 +221,23 @@ object ColonialTwilight {
   val TerrorMarker    = "Terror"
   
   // Capability Markers
-  val CapRevenge       = "FLN:Revenge"             // Place 1 Guerrilla after assault
-  val CapOverkill      = "Gov:Overkill"            // Neutralize removes 4 pieces
-  val CapScorch        = "FLN:Scorch"              // Assault costs 3 resources/space
-  val CapNapalm        = "Gov:Napalm"              // Assault kill 1:1 in mountain spaces
-  val CapTaleb         = "FLN:Taleb"               // City Terror costs zero resources
-  val CapAmateurBomber = "Gov:Amateur Bomber"      // City Terror msut activate 2 guerrillas
-  val CapXWilayaCoord  = "FLN:X Wilaya Coord"      // Redeploy to any base (regarless of Wilayaf)
-  val CapDeadZone      = "Gov:Dead Zone"           // March is 1 space only
-  val CapFlnSaS        = "FLN:SAS"                 // Assault is 1 space only
-  val CapGovSaS        = "Gov:SAS"                 // Train may pacify in 1 or 2 spaces
-  val CapFlnCommandos  = "FLN:Zonal Commandos"     // Ambush does not activate a guerrilla
-  val CapGovCommandos  = "Gov:Commandos de Chasse" // Each Algerian cube in mountain Sweep/Garrison activates 1 guerrilla
-  val CapTorture       = "Dual: Torture"
+  val CapRevenge         = "FLN:Overkill - Revenge"                       // Place 1 Guerrilla after assault
+  val CapOverkill        = "Gov:Overkill - Let God sort 'em out"          // Neutralize removes 4 pieces
+  val CapScorch          = "FLN:Napalm - Scorch"                          // Assault costs 3 resources/space
+  val CapNapalm          = "Gov:Napalm - Effective"                       // Assault kill 1:1 in mountain spaces
+  val CapEffectiveBomber = "FLN:Taleb Bomber - Effective"                 // City Terror costs zero resources
+  val CapAmateurBomber   = "Gov:Taleb Bomber - Amateur"                   // City Terror msut activate 2 guerrillas
+  val CapXWilayaCoord    = "FLN:Covert Movement - X Wilaya Coordination"  // Redeploy to any base (regardless of Wilaya)
+  val CapDeadZones       = "Gov:Covert Movement - Dead Zones"             // March is 1 space only
+  val CapFlnSaS          = "FLN:SAS - Caution"                            // Assault is 1 space only
+  val CapGovSaS          = "Gov:SAS - Hearts & Minds"                     // Train may pacify in 1 or 2 spaces
+  val CapFlnCommandos    = "FLN:Commandos - Zonal Commandos"              // Ambush does not activate a guerrilla
+  val CapGovCommandos    = "Gov:Commandos - Commandos de Chasse"          // Each Algerian cube in mountain Sweep/Garrison activates 1 guerrilla
+  val CapTorture         = "Dual: Torture"
 
   val AllCapabilities = List(
-    CapRevenge, CapOverkill, CapScorch, CapNapalm, CapTaleb, CapAmateurBomber, CapXWilayaCoord,
-    CapDeadZone, CapFlnSaS, CapGovSaS, CapFlnCommandos, CapGovCommandos, CapTorture)
+    CapRevenge, CapOverkill, CapScorch, CapNapalm, CapEffectiveBomber, CapAmateurBomber, CapXWilayaCoord,
+    CapDeadZones, CapFlnSaS, CapGovSaS, CapFlnCommandos, CapGovCommandos, CapTorture)
     
   
   // Momentum markers  
@@ -371,6 +360,8 @@ object ColonialTwilight {
     
     def only(pieceTypes: Seq[PieceType]): Pieces = 
       pieceTypes.foldLeft(Pieces()) { (pieces, t) => pieces.add(numOf(t), t) }
+      
+    def only(pieceType: PieceType): Pieces = only(Seq(pieceType))
     
     def + (added: Pieces): Pieces = Pieces(
       frenchTroops     = frenchTroops     + added.frenchTroops,
@@ -453,10 +444,12 @@ object ColonialTwilight {
       val z = if (spaceType == Sector) s" $zone" else ""
       s"$name$z"
     }
-          
+    
+    override def toString() = nameAndZone      
+    
     private val ZONE = """([^-]+)-.*""".r
     
-    def walaya = zone match {
+    def wilaya = zone match {
       case ""      => ""  // Country
       case ZONE(w) => w   // Sector
       case x       => x   // City
@@ -566,30 +559,8 @@ object ColonialTwilight {
   val SpaceNames = (DefaultSpaces map (_.name)).sorted
   val BorderCountryNames = List(Morocco, Tunisia)
 
-  // Morocco/Tunisia have blank walayas
-  def inSameWalaya(src: String, dest: String) = (game getSpace src).walaya == (game getSpace dest).walaya
-  
-  // Shortest distance between spaces
-  def distance(source: String, dest: String): Int = {
-    def measure(current: String, visited: Set[String]): Option[Int] = {
-      if (current == dest)
-        Some(0)
-      else {
-        (getAdjacent(current) filterNot visited) match {
-          case Nil       => None
-          case adjacents => 
-            val paths = adjacents.map(a => measure(a, visited ++ adjacents)).flatten.sorted
-            paths match {
-              case Nil => None
-              case x :: _ => Some(1 + x)
-            }
-        }
-      }
-    }
-    measure(source, Set.empty).get
-  }
-  
-  
+  // Morocco/Tunisia have blank wilayas
+  def inSameWilaya(src: String, dest: String) = (game getSpace src).wilaya == (game getSpace dest).wilaya
   
   val EdgeTrackMax             = 50
   val FranceTrackMax           =  5  // 0(A) to 5(F)
@@ -730,6 +701,8 @@ object ColonialTwilight {
     
     val algerianSpaces = spaces filterNot (_.isCountry)
     val countrySpaces  = spaces filter (_.isCountry)
+    
+    def wilayaSpaces(wilaya: String) = algerianSpaces filter (_.wilaya == wilaya)
     
     val franceTrackLetter = ('A' + franceTrack).toChar
 
@@ -1425,16 +1398,19 @@ object ColonialTwilight {
 
   // Move the given pieces from the source space to the destination space
   // and log the activity.
-  def movePieces(pieces: Pieces, source: String, dest: String): Unit = {
+  def movePieces(pieces: Pieces, source: String, dest: String, activateGuerrillas: Boolean = false): Unit = {
     val srcSpace = game.getSpace(source)
     val dstSpace = game.getSpace(dest)
     assert(srcSpace.pieces contains pieces, s"$source does not contain all requested pieces: $pieces")
     
+    val finalPieces = if (activateGuerrillas) pieces.activateGuerrillas(pieces.hiddenGuerrillas) else pieces
     val updatedSrc = srcSpace.copy(pieces = srcSpace.pieces - pieces)
-    val updatedDst = dstSpace.copy(pieces = dstSpace.pieces + pieces)
+    val updatedDst = dstSpace.copy(pieces = dstSpace.pieces + finalPieces)
     game = game.updateSpace(updatedSrc).updateSpace(updatedDst)
     log(s"\nMove the following pieces from $source to $dest:")
     wrap("  ", pieces.stringItems) foreach (log(_))
+    if (activateGuerrillas && pieces.hiddenGuerrillas > 0)
+      log(s"Activate the ${hiddenG(pieces.hiddenGuerrillas)}")
     logControlChange(srcSpace, updatedSrc)
     logControlChange(dstSpace, updatedDst)
   }
@@ -1507,7 +1483,9 @@ object ColonialTwilight {
           increaseCommitment(num)
       }
     
-      game = game.updateSpace(sp.copy(pieces = pieces))
+      val updated = sp.copy(pieces = pieces)
+      game = game.updateSpace(updated)
+      logControlChange(sp, updated)
     }
     // Finally update the casualties 
     game = game.copy(casualties = casualties)

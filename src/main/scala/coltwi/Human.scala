@@ -48,6 +48,17 @@ object Human {
     eventAction: Boolean            = false  // Event actions ignore some limitations.
   )
   
+  // Sorts alphabetically, but puts France track and Border zone track at the front.
+ val TrainingSpaceOrdering = new Ordering[String] {
+    def compare(x: String, y: String) = (x, y) match {
+      case (FranceTrackName, _)     => -1
+      case (_, FranceTrackName)     => 1
+      case (BorderZoneTrackName, _) => -1
+      case (_, BorderZoneTrackName) => 1
+      case (_, _)                   => x compare y
+    }
+  }
+  
   // Aid in keeping track of when a special activity can be taken
   object specialActivity {
     private var alllowSpecialActivity = false
