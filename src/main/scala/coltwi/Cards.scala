@@ -31,8 +31,10 @@ package coltwi
 import ColonialTwilight._
 
 object Cards {
-  val Single = false
-  val Dual   = true
+  val Single     = false
+  val Dual       = true
+  val FlnMarked  = true
+  val Capability = true
 
   // Convenience method for adding a card to the deck.
   private def entry(card: Card) = (card.number -> card)
@@ -40,16 +42,30 @@ object Cards {
   val deckMap: Map[Int, Card] = Map(
     // ------------------------------------------------------------------------
     entry(new Card(1, "Quadrillage", Dual, false, false,
-      () => NoEvent,
-      (role: Role) => (),
-      (role: Role) => ()
+      () => {
+        // val (gameState, turnState, _) = Bot.tryOperations {
+        //   Bot.ConsiderMarch.execute(Bot.Params(free = true, maxSpaces = Some(1)))
+        // }
+        // if (anySpacesChanged(game, gameState)) Shaded esle NoEvent
+        NoEvent
+      },
+      (role: Role) => {
+        // role will never be Fln
+      },
+      (role: Role) => {
+        // if (role == Gov) {
+        //
+        // }
+        // else { // Fln
+        // }
+      }
     )),
     entry(new Card(2, "Balky Conscripts", Dual, false, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(3, "Leadership Snatch", Dual, true, false,
+    entry(new Card(3, "Leadership Snatch", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -69,7 +85,7 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(7, "5th Bureau", Dual, true, false,
+    entry(new Card(7, "5th Bureau", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -79,17 +95,17 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(9, "Beni-Oui-Oui", Single, true, false,
+    entry(new Card(9, "Beni-Oui-Oui", Single, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(10, "Moudjahidine", Dual, true, false,
+    entry(new Card(10, "Moudjahidine", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(11, "Bananes", Dual, true, false,
+    entry(new Card(11, "Bananes", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -97,17 +113,17 @@ object Cards {
     // #12 Special Instructions
     // If able, redistribute Underground Guerrillas to most support
     // per March limitations, otherwise choose Op(+Sa)
-    entry(new Card(12, "Ventilos", Dual, true, false,
+    entry(new Card(12, "Ventilos", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(13, "SAS", Dual, false, true,
+    entry(new Card(13, "SAS", Dual, false, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(14, "Protest in Paris", Single, true, false,
+    entry(new Card(14, "Protest in Paris", Single, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -122,24 +138,24 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(17, "Commandos", Dual, false, true,
+    entry(new Card(17, "Commandos", Dual, false, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(18, "Torture", Single, true, true,
+    entry(new Card(18, "Torture", Single, FlnMarked, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(19, "General Strike", Dual, true, false,
+    entry(new Card(19, "General Strike", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
     // #20 Special Instructions
     // Choose Op(+SA)
-    entry(new Card(20, "Suave qui peut", Single, true, false,
+    entry(new Card(20, "Suave qui peut", Single, FlnMarked, false,
       () => NoEvent,  // Bot never plays this event
       (role: Role) => (),
       (role: Role) => ()
@@ -149,17 +165,17 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(22, "The Government of USA is Convinced...", Dual, true, false,
+    entry(new Card(22, "The Government of USA is Convinced...", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(23, "Diplomatic Leanings", Dual, true, false,
+    entry(new Card(23, "Diplomatic Leanings", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(24, "Economic Development", Dual, true, false,
+    entry(new Card(24, "Economic Development", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -169,17 +185,17 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(26, "Casbah", Dual, true, false,
+    entry(new Card(26, "Casbah", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(27, "Covert Movement", Dual, false, true,
+    entry(new Card(27, "Covert Movement", Dual, false, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(28, "Atrocities and Reprisals", Single, true, false,
+    entry(new Card(28, "Atrocities and Reprisals", Single, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -194,12 +210,12 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(31, "Intimidation", Dual, true, false,
+    entry(new Card(31, "Intimidation", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(32, "Teleb the Bomb-maker", Dual, false, true,
+    entry(new Card(32, "Teleb the Bomb-maker", Dual, false, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -210,22 +226,22 @@ object Cards {
     //  - First at assault space at Support with highest population
     //  - Then at assault space with FLN base with highest population
     //  - Then at random assault space with highest population
-    entry(new Card(33, "Overkill", Dual, true, true,
+    entry(new Card(33, "Overkill", Dual, FlnMarked, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(34, "Elections", Dual, true, false,
+    entry(new Card(34, "Elections", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(35, "Napalm", Dual, true, true,
+    entry(new Card(35, "Napalm", Dual, FlnMarked, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(36, "Assassination", Dual, true, false,
+    entry(new Card(36, "Assassination", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -250,17 +266,17 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(41, "Egypt", Dual, true, false,
+    entry(new Card(41, "Egypt", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(42, "Czech Arms Deal", Dual, true, false,
+    entry(new Card(42, "Czech Arms Deal", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(43, "Refugees", Dual, true, false,
+    entry(new Card(43, "Refugees", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -280,19 +296,19 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(47, "Third Force", Dual, true, false,
+    entry(new Card(47, "Third Force", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(48, "Ultras", Dual, true, false,
+    entry(new Card(48, "Ultras", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
     // #49 Special Instructions
     // Distribute evenly, if already even choose Op(+SA)
-    entry(new Card(49, "Factional Plot", Dual, true, false,
+    entry(new Card(49, "Factional Plot", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -306,7 +322,7 @@ object Cards {
     // Place at Support. (shaded)
     // If unable, play unshaded part selecting highest Pop AND no FLN Base.
     // Otherwise chose Op(+SA)
-    entry(new Card(51, "Stripey Hole", Dual, true, false,
+    entry(new Card(51, "Stripey Hole", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -316,7 +332,7 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(53, "Population Control", Dual, true, false,
+    entry(new Card(53, "Population Control", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -324,24 +340,24 @@ object Cards {
     // #54 Special Instructions
     // Move from random spaces to an empty 0 Pop Sector no adjacent to FLN Bases.
     // Otherwise choose Op(+SA)
-    entry(new Card(54, "Operation 744", Single, true, false,
+    entry(new Card(54, "Operation 744", Single, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(55, "Development", Dual, true, false,
+    entry(new Card(55, "Development", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
     // #56 Special Instructions
     // Play in final Campaign only.
-    entry(new Card(56, "Hardened Attitudes", Single, true, false,
+    entry(new Card(56, "Hardened Attitudes", Single, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(57, "Peace Talks", Single, true, false,
+    entry(new Card(57, "Peace Talks", Single, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -351,12 +367,12 @@ object Cards {
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(59, "Bandung Conference", Dual, true, false,
+    entry(new Card(59, "Bandung Conference", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
     )),
-    entry(new Card(60, "Soummam Conference", Dual, true, false,
+    entry(new Card(60, "Soummam Conference", Dual, FlnMarked, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()
@@ -377,7 +393,7 @@ object Cards {
     )),
     // #63 Special Instructions
     // Bot will never play this event
-    entry(new Card(63, "OAS", Single, false, true,
+    entry(new Card(63, "OAS", Single, false, Capability,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => ()

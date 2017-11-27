@@ -1207,74 +1207,76 @@ object Bot {
       val maxTotalDestinations = if (!canDoMultipleSpaces)         1
                                  else if (game.resources(Fln) < 9) 1000 // No limit
                                  else                              game.resources(Fln) * 2 / 3
-      
-      def canContinue = marchDestinations.size < maxTotalDestinations 
-      
+            
       // Try to execute each
       def doMarches(marchType: MarchType, numTargets: Int, candidates: List[MarchDest]): Unit = {
         def executeResolvedDest(resolved: ResolvedDest): Option[ExecutedMarch] = {
           val (newGame, newState, (success, cost, anyHidden)) = tryOperations {
-            val cost = resolved.cost(marchDestinations)
+            if ((marchDestinations ++ resolved.marchSpaces).size < maxTotalDestinations) {
+              val cost = resolved.cost(marchDestinations)
             
-            if (marchDestinations.isEmpty) {
-              log()
-              log(s"$Fln chooses: March")
-            }
+              if (marchDestinations.isEmpty) {
+                log()
+                log(s"$Fln chooses: March")
+              }
             
-            if (game.resources(Fln) < cost) {
-              case class ResolvedMarch(path: MarchPath, guerrillas: Pieces)
+              if (game.resources(Fln) < cost) {
+                case class ResolvedMarch(path: MarchPath, guerrillas: Pieces)
               
-              // Protect hidden guerrillas from exort if necessary
-              val protectedGuerrillas = if (marchType.hiddenOnly)
-                resolved.marches map (m => (m.path.source, m.guerrillas.hiddenGuerrillas))
+                // Protect hidden guerrillas from exort if necessary
+                val protectedGuerrillas = if (marchType.hiddenOnly)
+                  resolved.marches map (m => (m.path.source, m.guerrillas.hiddenGuerrillas))
+                else
+                  Nil
+                tryExtort(protectedGuerrillas)
+              }
+            
+              if (game.resources(Fln) >= cost) {
+                val newSpaces = (resolved.marchSpaces -- marchDestinations).toList.sorted
+                if (newSpaces.nonEmpty) {
+                  log()
+                  if (newSpaces.size > 1)
+                    wrap(s"$Fln selects March spaces: ", newSpaces) foreach (log(_))
+                  else
+                    log(s"$Fln selects March space: ${newSpaces.toList.head}")
+                }
+            
+                decreaseResources(Fln, cost)
+              
+                var hiddenArrived = false
+                // Recalcuate the marcher on each path because some of them may have
+                // been activated by a previous extort
+                for {
+                  march <- resolved.marches 
+                  path   = march.path
+                  num    = march.guerrillas.total
+                } {
+                  val activates  = path.activates(num)
+                  val guerrillas = path.marchers(num, marchType.hiddenOnly, !activates)
+                  log()
+                  if (path.isAdjacent)
+                    log(s"$Fln marches adjacent from ${path.source} to ${path.dest}")
+                  else {
+                    log(s"$Fln marches from ${path.source} to ${path.dest} via:")
+                    wrap("  ", path.spaces.tail.init) foreach (log(_))
+                  }
+                  if (guerrillas.hiddenGuerrillas > 0 && activates) {
+                    val activateSpace = path.activatedBySpace(num).get
+                    log(s"Entering $activateSpace activates the hidden guerrillas")
+                  }
+                  else
+                    hiddenArrived = hiddenArrived | (guerrillas.hiddenGuerrillas > 0)
+                  val beforePieces = game.getSpace(path.dest).pieces
+                  movePieces(guerrillas, path.source, path.dest, activates)
+                  turnState = turnState.addMovingGroup(path.dest, game.getSpace(path.dest).pieces - beforePieces)
+                }
+                (true, cost, hiddenArrived)
+              } 
               else
-                Nil
-              tryExtort(protectedGuerrillas)
+                (false, 0, false) // Failed due to lack of resources
             }
-            
-            if (game.resources(Fln) >= cost) {
-              val newSpaces = (resolved.marchSpaces -- marchDestinations).toList.sorted
-              if (newSpaces.nonEmpty) {
-                log()
-                if (newSpaces.size > 1)
-                  wrap(s"$Fln selects March spaces: ", newSpaces) foreach (log(_))
-                else
-                  log(s"$Fln selects March space: ${newSpaces.toList.head}")
-              }
-            
-              decreaseResources(Fln, cost)
-              
-              var hiddenArrived = false
-              // Recalcuate the marcher on each path because some of them may have
-              // been activated by a previous extort
-              for {
-                march <- resolved.marches 
-                path   = march.path
-                num    = march.guerrillas.total
-              } {
-                val activates  = path.activates(num)
-                val guerrillas = path.marchers(num, marchType.hiddenOnly, !activates)
-                log()
-                if (path.isAdjacent)
-                  log(s"$Fln marches adjacent from ${path.source} to ${path.dest}")
-                else {
-                  log(s"$Fln marches from ${path.source} to ${path.dest} via:")
-                  wrap("  ", path.spaces.tail.init) foreach (log(_))
-                }
-                if (guerrillas.hiddenGuerrillas > 0 && activates) {
-                  val activateSpace = path.activatedBySpace(num).get
-                  log(s"Entering $activateSpace activates the hidden guerrillas")
-                }
-                else
-                  hiddenArrived = hiddenArrived | (guerrillas.hiddenGuerrillas > 0)
-                val beforePieces = game.getSpace(path.dest).pieces
-                movePieces(guerrillas, path.source, path.dest, activates)
-                turnState = turnState.addMovingGroup(path.dest, game.getSpace(path.dest).pieces - beforePieces)
-              }
-              (true, cost, hiddenArrived)
-            } 
             else
-              (false, 0, false) // Failed due to lack of resources
+              (false, 0, false) // Failed, too many destinations
           }
           
           if (success)
@@ -1311,8 +1313,8 @@ object Bot {
           }
         
           nextMarch(optimized, Nil, 0, paidFor) match {
-            case Nil => None
-            case ms  => Some(ResolvedDest(marchDest.destName, ms))
+            case Nil             => None
+            case resolvedMarches => Some(ResolvedDest(marchDest.destName, resolvedMarches))
           }
         }
     

@@ -44,8 +44,7 @@ object Human {
     includeSpecialActivity: Boolean = false,
     maxSpaces: Option[Int]          = None,
     free: Boolean                   = false, // Events grant free commands
-    onlyIn: Option[Set[String]]     = None,  // Limit command to the given spaces
-    eventAction: Boolean            = false  // Event actions ignore some limitations.
+    onlyIn: Option[Set[String]]     = None   // Limit command to the given spaces
   )
   
   // Sorts alphabetically, but puts France track and Border zone track at the front.
