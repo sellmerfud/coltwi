@@ -38,7 +38,7 @@ import scala.io.StdIn.readLine
 import scala.language.implicitConversions
 import scenarios._
 import FUtil.Pathname
-// import Pickling.{ loadGameState, saveGameState }
+import Pickling.{ loadGameState, saveGameState }
 
 
 object ColonialTwilight {
@@ -1598,31 +1598,36 @@ object ColonialTwilight {
   val AbortActionString = "abort action"
   case object ExitGame extends Exception
   case object AbortAction extends Exception
+  case object Rollback extends Exception
   
   def main(args: Array[String]): Unit = {
     import scenarios._
     try {
-      println()
-      val scenarioName = {
-        // prompt for scenario
-        println("Choose a scenario:")
-        val choices = scenarioChoices :+ ("quit" -> "Quit")
-        askMenu(choices, allowAbort = false).head match {
-          case "quit"   => throw ExitGame
-          case scenario => scenario
-        }
-      }
-      val scenario = scenarios(scenarioName)
+      gamesDir.mkpath()
 
-      game = initialGameState(scenario)
-      logSummary(game.scenarioSummary)
-      log()
-      scenario.additionalSetup()
-      saveTurn()  // Save the initial game state as turn-0
-      saveGameDescription(turnsCompleted = 0)
-      game = game.copy(turn = game.turn + 1)
-      println()
-      drawCard("Enter the card # of the first card: ")
+      askWhichGame() match {
+        case Some(name) =>
+          loadMostRecent(name)
+      
+        case None => // Start a new game
+          println()
+          val scenarioName = {
+            // prompt for scenario
+            println("Choose a scenario:")
+            val choices = scenarioChoices :+ ("quit" -> "Quit")
+            askMenu(choices, allowAbort = false).head match {
+              case "quit"   => throw ExitGame
+              case scenario => scenario
+            }
+          }
+          val scenario = scenarios(scenarioName)
+          gameName = Some(askGameName("Enter a name for your new game: "))
+
+          game = initialGameState(scenario)
+          logSummary(game.scenarioSummary)
+          log()
+          scenario.additionalSetup()
+      }
       mainLoop()
     }
     catch {
@@ -1630,15 +1635,131 @@ object ColonialTwilight {
     }
   }
   
-  def saveTurn(): Unit = ()
+  // Ask which saved game the user wants to load.
+  // Return None if they wish to start a new game.
+  def askWhichGame(): Option[String] = {
+    val games = savedGames
+    if (games.isEmpty)
+      None
+    else {
+      val gameChoices = games.toList map { name =>
+        val desc = loadGameDescription(name)
+        val suffix = if (desc == "") "" else s": $desc"
+        name -> s"Resume '$name'$suffix"
+      }
+      val choices = ("--new-game--" -> "Start a new game") :: gameChoices ::: List("--quit-game--" -> "Quit")
+      println()
+      println("Which game would you like to play:")
+      askMenu(choices, allowAbort = false).head match {
+        case "--new-game--"  => None
+        case "--quit-game--" => throw ExitGame
+        case name            => Some(name)
+      }
+    }
+  }
+  
+  // We assume that the current working directory
+  // set as the installed directory and thus the game directory
+  // is in ./games.  The script used to invoke the program will
+  // ensure that is the case.
+  val gamesDir = Pathname("./games")
+  var gameName: Option[String] = None // The name of sub-directory containing the game files
+  
+  val TURN = """turn-(\d+)""".r
+  
+  def gameFilePath(filename: String): Pathname = {
+    assert(gameName.nonEmpty, "gameFilePath(): called with gameName not set!")
+    gamesDir/gameName.get/filename
+  }
+  
+  def turnFilename(num: Int): String = s"turn-$num"
+  
+  def gameDescPath(nameOfGame: String): Pathname = gamesDir/nameOfGame/"description"
+  
+  
+  def turnFileNumber(path: Pathname): Int = path.basename.toString match {
+    case TURN(n) => n.toInt
+    case _ => throw new IllegalArgumentException(s"turnFileNumber(): Invalid turn file: $path")
+  }
+  
+  def saveTurn(): Unit = {
+    saveGameState(gameFilePath(turnFilename(game.turn)), game)
+  }
   
   // Save a brief description of the game.
   // The descriptions are used by the askWhichGame() function.
   def saveGameDescription(turnsCompleted: Int): Unit = {
-    // val desc = s"${game.params.scenarioName}, playing ${game.humanRole}, ${amountOf(turnsCompleted, "turn")} completed"
-    // gameDescPath(gameName.get).writeFile(desc)
+    val desc = s"${game.params.scenarioName}, ${amountOf(turnsCompleted, "turn")} completed"
+    gameDescPath(gameName.get).writeFile(desc)
   }
   
+  def loadGameDescription(nameOfGame: String): String = {
+    val path = gameDescPath(nameOfGame)
+    if (path.exists)
+      path.readFile()
+    else
+      ""
+  }
+  
+  // Load the most recent game file for the given game.
+  def loadMostRecent(name: String): Unit = {
+    val filename = mostRecentSaveFile(name) getOrElse {
+      throw new IllegalStateException(s"No saved file found for game '$name'")
+    }
+    gameName = Some(name)
+    game = loadGameState(gameFilePath(filename))
+  }
+
+  // Return the list of saved games
+  def savedGames: Seq[String] =
+    gamesDir.children(withDirectory = false) map (_.toString) filter { name =>
+      mostRecentSaveFile(name).nonEmpty 
+    }
+
+  // Given a directory for a saved game finds the most recent save file.
+  def mostRecentSaveFile(name: String): Option[String] = {
+    case class Entry(number: Int, filename: String)
+    val dir = gamesDir/name
+    if (dir.isDirectory) {
+      val entries = dir.children(withDirectory = false) map { child =>
+        child.toString match {
+          case name @ TURN(n) => Entry(n.toInt, name)
+          case _              => Entry(-1, "")
+        }
+      }
+      (entries filter (_.number >= 0)).sortBy(-_.number).headOption map (_.filename)
+    }
+    else
+      None
+  }
+
+  val VALID_NAME = """([-A-Za-z0-9_ ]+)""".r
+
+  // Ask the user for a name for their new game.
+  def askGameName(prompt: String): String = {
+    def getName: String = {
+      readLine(prompt) match {
+        case null => getName
+        case VALID_NAME(name) =>
+          if ((gamesDir/name).exists) {
+            println(s"A game called '$name' already exists.")
+            if (askYorN(s"Do you want to overwrite the existing game (y/n)? ")) {
+              (gamesDir/name).rmtree()
+              name
+            }
+            else
+              getName
+          }
+          else
+            name
+        case name => 
+          println("Game names must consist of one or more letters, numbers, spaces, dashes or undercores")
+          getName
+      }
+    }
+    getName
+  }
+
   def drawCard(prompt: String): Unit = {
     val cardNum = askCardNumber(prompt)
     game = game.copy(currentCard = Some(cardNum))
@@ -1653,24 +1774,26 @@ object ColonialTwilight {
   // ---------------------------------------------
   // Process all top level user commands.
   @tailrec def mainLoop(): Unit = {
-    val newSequence = if (game.isPropRound) {
-      game = game.copy(propCardsPlayed = game.propCardsPlayed + 1)
-      resolvePropagandaCard()
-      SequenceOfPlay()
-    }
-    else {
-      resolveEventCard()
-      game.sequence.reset()
-    }
-    
-    game = game.copy(sequence = newSequence)
-    saveTurn()
+    saveTurn()  // Save the current game state
     saveGameDescription(turnsCompleted = game.turn)
-    
     game = game.copy(turn = game.turn + 1)
-    
     println()
     drawCard("Enter the card # of the next card (or quit): ")
+    try {
+      val newSequence = if (game.isPropRound) {
+        game = game.copy(propCardsPlayed = game.propCardsPlayed + 1)
+        resolvePropagandaCard()
+        SequenceOfPlay()
+      }
+      else {
+        resolveEventCard()
+        game.sequence.reset()
+      }
+      game = game.copy(sequence = newSequence)
+    }
+    catch {
+      case Rollback => // We continue with the previously saved game state
+    }
     mainLoop()
   }
   
@@ -1748,7 +1871,7 @@ object ColonialTwilight {
   object RollbackCmd extends Command {
     val name = "rollback"
     val desc = "Roll back to the start of any turn"
-    val action = (_: Option[String]) => rollback()
+    val action = (param: Option[String]) => rollback(param)
   }
   
   object QuitCmd extends Command {
@@ -1797,9 +1920,41 @@ object ColonialTwilight {
     }
   }
   
-  def rollback(): Unit = {
-    println("rollback has not been implemented")
+  // Allows the user to roll back to the beginning of any turn.
+  def rollback(input: Option[String]): Unit = {
+    val NUMBER = """(\d+)""".r
+    val inputNum = input flatMap {
+      case NUMBER(n) if n.toInt > 0 && n.toInt <= game.turn => Some(n.toInt)
+      case _ => None
+    }
+    
+    try {
+      val turnNumber = inputNum getOrElse {
+        println("\nRollback to the beginning of a previous turn")
+        askInt("Enter turn number", 1, game.turn)
+      }
+    
+      // Games are saved at the end of the turn, so we actually want
+      // to load the file with turnNumber -1.
+      val newGameState = loadGameState(gameFilePath(turnFilename(turnNumber - 1)))
+      removeTurnFiles(turnNumber)      
+      displayGameStateDifferences(game, newGameState)
+      game = newGameState
+      throw Rollback
+    }
+    catch {
+      case AbortAction =>
+    }
   }
+  
+  // Remove turn files starting with the given number an all 
+  // those that follow the number.
+  def removeTurnFiles(num: Int = 0): Unit = {
+    import Pathname.glob    
+    val turnFiles = glob(gamesDir/gameName.get/"turn*")
+    turnFiles filter (turnFileNumber(_) >= num) foreach (_.delete())
+  }
+  
 
   @tailrec def resolveEventCard(): Unit = {
     val card = deck(game.currentCard.get)
