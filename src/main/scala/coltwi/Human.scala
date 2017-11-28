@@ -106,7 +106,7 @@ object Human {
       else
         Set.empty
       
-      val bzt = if (game.pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent) && game.borderZoneTrack < BorderZoneTrackMax)
+      val bzt = if (game.moroccoTunisiaIndependent && game.borderZoneTrack < BorderZoneTrackMax)
         Set(BorderZoneTrackName)
       else
         Set.empty
@@ -177,7 +177,10 @@ object Human {
           case FranceTrackName     => decreaseFranceTrack(1)
           case BorderZoneTrackName => increaseBorderZoneTrack(1)
           case _ =>
-            val toPlace = askPiecesToPlace(spaceName, List(AlgerianTroops, AlgerianPolice), maxToPlace = 4)
+            val sp = game.getSpace(spaceName)
+            val validPieces = if (sp.moghazniTrainOnly) List(AlgerianPolice) 
+                              else                      List(AlgerianTroops, AlgerianPolice)
+            val toPlace = askPiecesToPlace(spaceName, validPieces, maxToPlace = 4)
             placePieces(spaceName, toPlace)
         }
         true
@@ -447,8 +450,9 @@ object Human {
     override def toString() = "Assault"
     
     def flnLosses(sp: Space): Pieces = {
-      val totalCubes = if (sp.isCity || sp.isBorderSector) sp.totalCubes else sp.totalTroops
-      val maxLosses  = if (sp.isMountains) totalCubes / 2 else totalCubes
+      val totalCubes = if (sp.isCity || sp.isBorderSector || momentumInPlay(MoChallePlanGov))
+        sp.totalCubes else sp.totalTroops
+      val maxLosses  = if (sp.isMountains && !capabilityInPlay(CapNapalm)) totalCubes / 2 else totalCubes
       val numGuerrillas = sp.activeGuerrillas min maxLosses
       val numBases = if (sp.flnBases == 0 || sp.hiddenGuerrillas > 0 || sp.activeGuerrillas >= maxLosses)
         0
@@ -457,6 +461,7 @@ object Human {
       Pieces(activeGuerrillas = numGuerrillas, flnBases = numBases)
     }
     val assaultFilter = (sp: Space) => flnLosses(sp).total > 0
+    val costPerSpace = if (capabilityInPlay(CapScorch)) 3 else 2
     
     override def execute(params: Params): Int = {
       var assaultSpaces = Set.empty[String]
@@ -464,7 +469,7 @@ object Human {
       def nextChoice(): Unit = {
         val assaultCandidates: Set[String] = if (capabilityInPlay(CapFlnSaS) && assaultSpaces.nonEmpty)
           Set.empty
-        else if (game.resources(Gov) < 2 && !params.free)
+        else if (game.resources(Gov) < costPerSpace && !params.free)
           Set.empty
         else 
           params.maxSpaces match {
@@ -489,10 +494,8 @@ object Human {
             askCandidateAllowNone(s"\nChoose space to Assault: ", assaultCandidates.toList.sorted) foreach { spaceName =>
               log()
               log(s"$Gov executes Assault operation: $spaceName")
-              if (!params.free) {
-                log()
-                decreaseResources(Gov, 2)
-              }
+              if (!params.free)
+                decreaseResources(Gov, costPerSpace)
               removeLosses(spaceName, flnLosses(game.getSpace(spaceName)))
               assaultSpaces += spaceName
             }
@@ -883,10 +886,12 @@ object Human {
   def executeOp(params: Params = Params()): Int =  {
     specialActivity.init(params.includeSpecialActivity)
     movingGroups.reset()
-    
-    val choices = List(Train,Garrison,Sweep,Assault) map (o => o -> o.toString)
+    val ops = if (momentumInPlay(MoPeaceTalks))
+      List(Train,Garrison,Sweep)
+    else
+      List(Train,Garrison,Sweep,Assault)
     println("\nChoose Operation:")
-    val op = askMenu(choices).head
+    val op = askMenu(ops map (o => (o -> o.toString))).head
     op.execute(params)
   }
     

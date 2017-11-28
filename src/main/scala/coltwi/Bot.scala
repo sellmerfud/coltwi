@@ -118,7 +118,57 @@ object Bot {
     beforeState.totalOnMap(_.flnBases) < afterState.totalOnMap(_.flnBases) ||
     beforeState.resources(Fln)         < afterState.resources(Fln)
   )
+
+  // name will be either "available" or the name of a map space
+  case class FromMap(num: Int, name: String)
+  case class GuerrillasToPlace(numAvailable: Int, fromMap: List[FromMap]) {
+    def total = numAvailable + (fromMap map (_.num)).sum
+  }
   
+  // Get guerrillas from the available box first, then from map spaces.
+  def getGuerrillasToPlace(num: Int, target: Space): GuerrillasToPlace = {
+    if (num == 0)
+      GuerrillasToPlace(0, Nil)
+    else if (game.guerrillasAvailable >= num)
+      GuerrillasToPlace(num, Nil)
+    else
+      GuerrillasToPlace(game.guerrillasAvailable, eligibleGuerrillasOnMap(num - game.guerrillasAvailable, target))
+  }
+  
+  def eligibleGuerrillasOnMap(totalNeeded: Int, target: Space): List[FromMap] = {
+    def numEligible(sp: Space) = if (sp.flnBases > 0 || sp.isSupport)
+      sp.activeGuerrillas min (sp.totalGuerrillas - 2)
+    else
+      sp.activeGuerrillas
+          
+    def getNext(remaining: Int, entries: List[FromMap]): List[FromMap] = {
+      entries match {
+        case Nil => Nil
+        case _ if remaining == 0 => Nil
+        case x :: xs =>
+          val num = x.num min remaining
+          x.copy(num = num) :: getNext(remaining - num, xs)
+      }
+    }
+    
+    val all = (if (target.isCountry) game.spaces else game.algerianSpaces) filterNot (_.name == target.name)
+    val eligible = (all flatMap { sp =>
+      val n = numEligible(sp)
+      if (n > 0) Some(FromMap(n, sp.name)) else None
+    }).sortBy { case FromMap(n, _) => -n }
+    
+    getNext(totalNeeded, eligible)
+  }
+  
+  // Place guerrillas from available.  First removing any from
+  // the map if necessary.
+  def placeGuerrillas(spaceName: String, guerrillas: GuerrillasToPlace): Unit = {
+    guerrillas.fromMap foreach { case FromMap(n, name) => 
+      removeToAvailableFrom(name, Pieces(activeGuerrillas = n))
+    }
+    placePieces(spaceName, Pieces(hiddenGuerrillas = guerrillas.total))
+  }
+    
 
   trait Filter[T] {
     val desc: String
@@ -320,8 +370,9 @@ object Bot {
       ((sp.flnBases == 0 || sp.isCountry) && sp.hiddenGuerrillas > protectedGs(sp.name)) ||
       (sp.flnBases > 0 && sp.hiddenGuerrillas > (1 + protectedGs(sp.name)))
     
-    val primary = (game.algerianSpaces filter { sp => 
+    val primary = (game.algerianSpaces filter { sp =>
       sp.population > 0  &&
+      (!momentumInPlay(MoHardendAttitudes) || !sp.isSector ||sp.flnBases > 0) &&
       sp.isFlnControlled && (
         (sp.flnBases > 0 && sp.totalCubes > 0 && sp.hiddenGuerrillas > (2 + protectedGs(sp.name))) ||
         ((sp.flnBases == 0 || sp.totalCubes == 0) && sp.hiddenGuerrillas > (1 + protectedGs(sp.name)))
@@ -329,8 +380,11 @@ object Bot {
     }) ::: (game.countrySpaces filter hasSafeHiddenGuerrilla)
     
     val primaryNames = spaceNames(primary).toSet
-    val secondary  = game.algerianSpaces filter 
-      (sp => !primaryNames(sp.name) && sp.isFlnControlled && hasSafeHiddenGuerrilla(sp))
+    val secondary  = game.algerianSpaces filter (sp => 
+      !primaryNames(sp.name)     &&
+      sp.isFlnControlled         && 
+      hasSafeHiddenGuerrilla(sp) && 
+      (!momentumInPlay(MoHardendAttitudes) || !sp.isSector || sp.flnBases > 0))
     
     if (primary.nonEmpty || (game.resources(Fln) == 0 && secondary.nonEmpty)) {
       turnState = turnState.copy(specialActivityTaken = true)
@@ -608,7 +662,7 @@ object Bot {
       }
       
       val oneResourceOnly = !turnState.freeOperation && game.resources(Fln) == 1
-      if (canKillAtLeastTwo) {
+      if (!momentumInPlay(MoPeaceTalks) && canKillAtLeastTwo) {
         log()
         log(s"$Fln chooses: Attack")
         val numSpaces = if (!turnState.multipleSpaces || oneResourceOnly) {
@@ -673,48 +727,6 @@ object Bot {
       new CriteriaFilter[Space]("In Algeria",            !_.isCountry),
       new HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas),
       new CriteriaFilter[Space]("No Gov cubes",          _.totalCubes == 0))
-
-    // name will be either "available" or the name of a map space
-    case class ToPlace(num: Int, name: String)
-    
-    // Get guerrillas from the available box first, then from map spaces.
-    // Return ToPlace() entries with up to the requested number of guerrillas
-    def getGuerrillasToPlace(num: Int, target: Space): (ToPlace, List[ToPlace]) = {
-      if (num == 0)
-        (ToPlace(0, "available"), Nil)
-      else if (game.guerrillasAvailable >= num)
-        (ToPlace(num, "available"), Nil)
-      else if (game.guerrillasAvailable > 0)
-        (ToPlace(game.guerrillasAvailable, "available"), eligibleGuerrillasOnMap(num - game.guerrillasAvailable, target))
-      else
-        (ToPlace(0, "available"), eligibleGuerrillasOnMap(num, target))
-    }
-    
-    def eligibleGuerrillasOnMap(totalNeeded: Int, target: Space): List[ToPlace] = {
-      def numEligible(sp: Space) = if (sp.flnBases > 0 || sp.isSupport)
-        sp.activeGuerrillas min (sp.totalGuerrillas - 2)
-      else
-        sp.activeGuerrillas
-            
-      def getNext(remaining: Int, entries: List[ToPlace]): List[ToPlace] = {
-        entries match {
-          case Nil => Nil
-          case _ if remaining == 0 => Nil
-          case x :: xs =>
-            val num = x.num min remaining
-            x.copy(num = num) :: getNext(remaining - num, xs)
-        }
-      }
-      
-      val all = (if (target.isCountry) game.spaces else game.algerianSpaces) filterNot (_.name == target.name)
-      val eligible = (all flatMap { sp =>
-        val n = numEligible(sp)
-        if (n > 0) Some(ToPlace(n, sp.name)) else None
-      }).sortBy { case ToPlace(n, _) => -n }
-      
-      getNext(totalNeeded, eligible)
-    }
-      
 
     def execute(): Either[ActionFlowchartNode, Action] = if (turnState.rallyConsidered)
       Left(BotPasses)
@@ -852,7 +864,7 @@ object Bot {
                   1
 
                 getGuerrillasToPlace(numToPlace, sp) match {
-                  case (ToPlace(0, _), Nil) if force =>
+                  case GuerrillasToPlace(0, Nil) if force =>
                     if (haveAResource()) {
                       log()
                       log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
@@ -861,7 +873,7 @@ object Bot {
                       rallySpaces += sp.name
                     }
                     
-                  case (ToPlace(0, _), Nil)  =>  // Flip any active
+                  case GuerrillasToPlace(0, Nil) =>  // Flip any active
                     if (numToPlace == 0 && sp.activeGuerrillas > 0 && haveAResource()) {
                       log()
                       log(s"$Fln executes Rally operation: ${sp.name}")
@@ -870,15 +882,14 @@ object Bot {
                       hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
                       rallySpaces += sp.name
                     }
-                  
-                  case (ToPlace(avail, _), fromMap) =>  // Place guerrillas from sources
+                                    
+                  case guerrillas =>  // Place guerrillas from sources
                     if (haveAResource()) {
                       log()
                       log(s"$Fln executes Rally operation: ${sp.name}")
                       if (!turnState.freeOperation)
                         decreaseResources(Fln, 1)
-                      fromMap foreach { case ToPlace(n, name) => removeToAvailableFrom(name, Pieces(activeGuerrillas = n)) }
-                      placePieces(sp.name, Pieces(hiddenGuerrillas = numToPlace min game.guerrillasAvailable))
+                      placeGuerrillas(sp.name, guerrillas)
                       rallySpaces += sp.name
                     }
                 }

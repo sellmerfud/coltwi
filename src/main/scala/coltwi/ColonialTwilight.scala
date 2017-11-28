@@ -226,7 +226,7 @@ object ColonialTwilight {
   // Capability Markers
   val CapRevenge         = "FLN:Overkill - Revenge"                       // Place 1 Guerrilla after assault
   val CapOverkill        = "Gov:Overkill - Let God sort 'em out"          // Neutralize removes 4 pieces
-  val CapScorch          = "FLN:Napalm - Scorch"                          // Assault costs 3 resources/space
+  val CapScorch          = "FLN:Napalm - Scorch the countryside"          // Assault costs 3 resources/space
   val CapNapalm          = "Gov:Napalm - Effective"                       // Assault kill 1:1 in mountain spaces
   val CapEffectiveBomber = "FLN:Taleb Bomber - Effective"                 // City Terror costs zero resources
   val CapAmateurBomber   = "Gov:Taleb Bomber - Amateur"                   // City Terror msut activate 2 guerrillas
@@ -511,11 +511,15 @@ object ColonialTwilight {
       
     def sweepHasEffect = pieces.hiddenGuerrillas > 0 &&
                          ((isMountains && pieces.totalCubes > 1) || (pieces.totalCubes > 0))
-    def canTrain = if (game.pivotalCardsPlayed(PivotalRecallDeGaulle))
-      isCity || hasGovBase || (isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0)
-    else
-      isCity || hasGovBase
+                       
+    val prohibitedTrainSector = momentumInPlay(MoHardendAttitudes) && isSector && !isSupport  
     
+    val normalTrain         = isCity || hasGovBase
+    val recallDeGaulleTrain = isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0
+    val moghazniTrain       = momentumInPlay(MoMoghazni) && isSector && isSupport && isGovControlled
+    
+    val canTrain          = (normalTrain || recallDeGaulleTrain || moghazniTrain) && !prohibitedTrainSector
+    val moghazniTrainOnly = moghazniTrain && !(normalTrain || recallDeGaulleTrain)
   }
   
   // Default empty spaces
@@ -708,6 +712,8 @@ object ColonialTwilight {
     def wilayaSpaces(wilaya: String) = algerianSpaces filter (_.wilaya == wilaya)
     
     val franceTrackLetter = ('A' + franceTrack).toChar
+    
+    def moroccoTunisiaIndependent = pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent)
 
     def isFinalCampaign = propCardsPlayed == (numberOfPropCards - 1)
     def govPivotalAvailable = deck.GovPivotalCards -- pivotalCardsPlayed
@@ -990,6 +996,27 @@ object ColonialTwilight {
     logSupportChange(sp, updated)
   }
   
+  def addBaseMarker(name: String): Unit = {
+    assert(name == Morocco || name == Tunisia, "addBaseMarker: only applies to Morocco and Tunisia")
+    val sp = game.getSpace(name)
+    if (sp.hasMarker(Plus1BaseMarker))
+      log(s"$name already has an extra base marker")
+    else {
+      game = game.updateSpace(sp.addMarker(Plus1BaseMarker))
+      log(s"Add Base marker to $name")
+    }
+  }
+
+  def addPlus1PopMarker(name: String): Unit = {
+    val sp = game.getSpace(name)
+    assert(sp.isCity, "addPlus1PopMarker: only applies to cities")
+    if (game.plus1PopMarkersAvailable > 0) {
+      game = game.updateSpace(sp.addMarker(Plus1PopMarker))
+      log(s"Add Base marker to $name")
+    }
+    else
+      log("There are no '+1 Pop' markers available")
+  }
 
   def setSupport(name: String, newLevel: SupportValue): Unit = {
     val sp = game.getSpace(name)
@@ -1407,12 +1434,66 @@ object ColonialTwilight {
     logControlChange(sp, updated)
   }
   
+  // Place pieces from the Out Of Play box in the given map space.
+  // There must be enough pieces in the out of play box or an exception is thrown.
+  def placePiecesFromOutOfPlay(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
+    assert(
+      game.outOfPlay.frenchTroops     >= pieces.frenchTroops &&
+      game.outOfPlay.frenchPolice     >= pieces.frenchPolice &&
+      game.outOfPlay.algerianTroops   >= pieces.algerianTroops &&
+      game.outOfPlay.algerianPolice   >= pieces.algerianPolice &&
+      game.outOfPlay.hiddenGuerrillas >= pieces.hiddenGuerrillas &&
+      game.outOfPlay.activeGuerrillas >= pieces.activeGuerrillas &&
+      game.outOfPlay.govBases         >= pieces.govBases &&
+      game.outOfPlay.flnBases         >= pieces.flnBases,
+      "Insufficent pieces in the out of play box"
+    )
+    
+    val sp = game.getSpace(spaceName)
+    val updated = sp.copy(pieces = sp.pieces + pieces)
+    game = game.updateSpace(updated).copy(outOfPlay = game.outOfPlay - pieces)
+    log(s"\nPlace the following pieces from out of play into $spaceName:")
+    wrap("  ", pieces.stringItems) foreach (log(_))
+    logControlChange(sp, updated)
+  }
+  
   def removeToAvailableFrom(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
     val sp = game.getSpace(spaceName)
     assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
     val updated = sp.copy(pieces = sp.pieces - pieces)
     game = game.updateSpace(updated)
     log(s"\nMove the following pieces from $spaceName to the available box:")
+    wrap("  ", pieces.stringItems) foreach (log(_))
+    logControlChange(sp, updated)
+  }
+
+  def removeToCasualties(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
+    val sp = game.getSpace(spaceName)
+    assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
+    val updated = sp.copy(pieces = sp.pieces - pieces)
+    // Guerrillas in casualties are always hidden.
+    val toCasualties = if (pieces.activeGuerrillas == 0)
+      pieces
+    else
+      pieces.remove(pieces.activeGuerrillas, ActiveGuerrillas).add(pieces.activeGuerrillas, HiddenGuerrillas)
+    game = game.updateSpace(updated).copy(casualties = game.casualties + toCasualties)
+    log(s"\nMove the following pieces from $spaceName to the casualties box:")
+    wrap("  ", pieces.stringItems) foreach (log(_))
+    logControlChange(sp, updated)
+  }
+
+  def removeToOutOfPlay(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
+    val sp = game.getSpace(spaceName)
+    assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
+    val updated = sp.copy(pieces = sp.pieces - pieces)
+    // Guerrillas in casualties are always hidden.
+    val toOop = if (pieces.activeGuerrillas == 0)
+      pieces
+    else
+      pieces.remove(pieces.activeGuerrillas, ActiveGuerrillas).add(pieces.activeGuerrillas, HiddenGuerrillas)
+    
+    game = game.updateSpace(updated).copy(outOfPlay = game.outOfPlay + toOop)
+    log(s"\nMove the following pieces from $spaceName to the Out of Play box:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     logControlChange(sp, updated)
   }
@@ -1780,17 +1861,6 @@ object ColonialTwilight {
 
   def safeToInt(str: String): Option[Int] = try Some(str.toInt) catch { case e: NumberFormatException => None }
   
-  def playCard(param: Option[String]): Unit = {
-    val cardNum = param flatMap safeToInt getOrElse askCardNumber("Enter the card number: ")
-    game = game.copy(currentCard = Some(cardNum))
-    log()
-    log(s"Turn #${game.turn}")
-    log(separator(char = '='))
-    log(s"Event card: ${deck(cardNum)}")
-    log(s"${game.sequence.firstEligible} is first eligible")
-    log(separator(char = '='))
-  }
-  
   // ---------------------------------------------
   // Process all top level user commands.
   @tailrec def mainLoop(): Unit = {
@@ -1857,7 +1927,16 @@ object ColonialTwilight {
                  |  card #    - Enter the number of the event card
                  |  card      - You will be prompted for the card number
                """.stripMargin
-    val action = (param: Option[String]) => playCard(param)
+    val action = (param: Option[String]) => {
+      val cardNum = param flatMap safeToInt getOrElse askCardNumber("Enter the card number: ")
+      game = game.copy(currentCard = Some(cardNum))
+      log()
+      log(s"Turn #${game.turn}")
+      log(separator(char = '='))
+      log(s"Event card: ${deck(cardNum)}")
+      log(s"${game.sequence.firstEligible} is first eligible")
+      log(separator(char = '='))
+    }
   }
   
   object BotCmd extends Command {
@@ -2006,9 +2085,9 @@ object ColonialTwilight {
     // Check to see if the Bot will play the "Morocco and Tunisia Independent" pivotal event.
     // FLN Bot never plays Suez Crisis or OAS pivotal events.
     val flnPivots = (game.pivotalCardsPlayed(PivotalMobilization)) &&
-                    !(game.pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent)) &&
-                    game.sequence.numActed == 0 &&
-                    game.sequence.secondEligible == Fln &&
+                    !game.moroccoTunisiaIndependent                &&
+                    game.sequence.numActed == 0                    &&
+                    game.sequence.secondEligible == Fln            &&
                     card.markedForFLN
     
     if (flnPivots)
@@ -2588,9 +2667,9 @@ object ColonialTwilight {
       val newValue = !sp.isResettled
       logAdjustment(name, "Resettled", sp.isResettled, newValue)
       if (newValue)
-        game = game.updateSpace(sp.copy(markers = ResettledMarker :: sp.markers))
+        game = game.updateSpace(sp.addMarker(ResettledMarker))
       else
-        game = game.updateSpace(sp.copy(markers = sp.markers filterNot (_ == ResettledMarker)))
+        game = game.updateSpace(sp.removeMarker(ResettledMarker))
       saveAdjustment(name, "Resettled")
     }
   }
@@ -2607,9 +2686,9 @@ object ColonialTwilight {
       val newValue = !plusOne
       logAdjustment(name, "+1 Pop", plusOne, newValue)
       if (newValue)
-        game = game.updateSpace(sp.copy(markers = Plus1PopMarker :: sp.markers))
+        game = game.updateSpace(sp.addMarker(Plus1PopMarker))
       else
-        game = game.updateSpace(sp.copy(markers = sp.markers filterNot (_ == Plus1PopMarker)))
+        game = game.updateSpace(sp.removeMarker(Plus1PopMarker))
       saveAdjustment(name, "+1 Pop")
     }
   }
@@ -2626,9 +2705,9 @@ object ColonialTwilight {
       val newValue = !plusOne
       logAdjustment(name, "+1 Base", plusOne, newValue)
       if (newValue)
-        game = game.updateSpace(sp.copy(markers = Plus1BaseMarker :: sp.markers))
+        game = game.updateSpace(sp.addMarker(Plus1BaseMarker))
       else
-        game = game.updateSpace(sp.copy(markers = sp.markers filterNot (_ == Plus1BaseMarker)))
+        game = game.updateSpace(sp.removeMarker(Plus1BaseMarker))
       saveAdjustment(name, "+1 Base")
     }
   }
