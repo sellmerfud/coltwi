@@ -102,8 +102,8 @@ object ColonialTwilight {
     val number: Int,
     val name: String,
     val dual: Boolean,
-    val markedForFLN: Boolean,
-    val isCapability: Boolean,
+    val markedForFLN: Boolean,  // Play the event if it is effective (no die < 5) necessary
+    val flnAlwaysPlay: Boolean, // Capabilities and some Fln marked events are always played even if not immediately effective
     val botEventSelection: BotEventSelector,
     val executeUnshaded: CardEvent,
     val executeShaded: CardEvent) {
@@ -756,6 +756,7 @@ object ColonialTwilight {
     
     // Does at least one space meet the given condtion?
     def hasSpace(test: (Space) => Boolean) = spaces exists test
+    def hasAlgerianSpace(test: (Space) => Boolean) = algerianSpaces exists test
     def getSpace(name: String) = (spaces find (_.name == name)).get
     def updateSpace(changed: Space): GameState =
       this.copy(spaces = changed :: (spaces filterNot (_.name == changed.name)))
@@ -893,8 +894,25 @@ object ColonialTwilight {
   
   def capabilityInPlay(cap: String) = game.capabilities contains cap
   
+  def playCapability(cap: String): Unit = {
+    game = game.copy(capabilities = cap :: game.capabilities)
+    log(s"Capability is now in play: $cap")
+  }
+  
+  def removeCapabilityFromPlay(cap: String): Unit = {
+    if (game.capabilities contains cap) {
+      game = game.copy(capabilities = game.capabilities filterNot (_ == cap))
+      log(s"Remove the capability '$cap' from play")
+    }
+  }
+  
   def momentumInPlay(mo: String) = game.momentum contains mo
-    
+  
+  def playMomentum(mo: String): Unit = {
+    game = game.copy(momentum = mo :: game.momentum)
+    log(s"Momentum event is now in play: $mo")
+  }
+  
   def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.activateGuerrillas(num))
@@ -1760,13 +1778,15 @@ object ColonialTwilight {
     getName
   }
 
-  def drawCard(prompt: String): Unit = {
-    val cardNum = askCardNumber(prompt)
+  def safeToInt(str: String): Option[Int] = try Some(str.toInt) catch { case e: NumberFormatException => None }
+  
+  def playCard(param: Option[String]): Unit = {
+    val cardNum = param flatMap safeToInt getOrElse askCardNumber("Enter the card number: ")
     game = game.copy(currentCard = Some(cardNum))
     log()
     log(s"Turn #${game.turn}")
     log(separator(char = '='))
-    log(s"Card played: ${deck(cardNum)}")
+    log(s"Event card: ${deck(cardNum)}")
     log(s"${game.sequence.firstEligible} is first eligible")
     log(separator(char = '='))
   }
@@ -1777,9 +1797,25 @@ object ColonialTwilight {
     saveTurn()  // Save the current game state
     saveGameDescription(turnsCompleted = game.turn)
     game = game.copy(turn = game.turn + 1)
-    println()
-    drawCard("Enter the card # of the next card (or quit): ")
     try {
+        
+      def getNextCard(): Unit = {
+        
+        val common  = List(ShowCmd, HistoryCmd, RollbackCmd, AdjustCmd)
+        val cmds    = List(PlayCardCmd)
+        val opts = orList((cmds map (_.name)) :+ "?")
+        val prompt  = s"""
+                      |>>> Turn ${game.turn}  (Event card notice yet played) <<<
+                      |${separator()}
+                      |Command ($opts): """.stripMargin
+        
+        val (cmd, param) = askCommand(prompt, cmds ::: common)
+        cmd.action(param)
+        if (cmd != PlayCardCmd)
+          getNextCard()
+      }
+      getNextCard()
+      
       val newSequence = if (game.isPropRound) {
         game = game.copy(propCardsPlayed = game.propCardsPlayed + 1)
         resolvePropagandaCard()
@@ -1813,6 +1849,15 @@ object ColonialTwilight {
     val name = "pivot"
     val desc = "Play a pivotal event card"
     val action = (_: Option[String]) => doPivot(Gov)
+  }
+  
+  object PlayCardCmd extends Command {
+    val name = "card"
+    val desc = """Play the next event card
+                 |  card #    - Enter the number of the event card
+                 |  card      - You will be prompted for the card number
+               """.stripMargin
+    val action = (param: Option[String]) => playCard(param)
   }
   
   object BotCmd extends Command {

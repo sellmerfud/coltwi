@@ -49,7 +49,8 @@ object Bot {
     specialActivityAllowed: Boolean   = false,
     specialActivityTaken: Boolean     = false,
     freeOperation: Boolean            = false,
-    maxSpaces: Option[Int]            = None,  // None == unlimited
+    maxSpaces: Option[Int]            = None,      // None == unlimited
+    onlyIn: Set[String]               = Set.empty, // Operation limited to these spaces only 
     movingGroups: Map[String, Pieces] = Map.empty.withDefaultValue(Pieces())
   ) {
     
@@ -64,6 +65,8 @@ object Bot {
   
   var turnState = TurnState()
   
+  // Used to filter spaces by the onlyIn field of turnState
+  val onlyIn = (sp: Space) => turnState.onlyIn.isEmpty || turnState.onlyIn(sp.name)
 
   // Does space have a guerrilla that can be flipped without exposing any bases?
   def hasSafeHiddenGuerrilla(sp: Space) = 
@@ -100,6 +103,21 @@ object Bot {
   def showLogEntries(orig: GameState, updated: GameState): Unit = {
     updated.history.drop(orig.history.size) foreach println
   }
+  
+  // In order for the Bot to play an event that is not marked for FLN play,
+  // the effects of the event must do at least one of the following:
+  // - Reduce the government's victory margin
+  // - Reduce the government's resources
+  // - Shift the France track toward 'F'
+  // - Place an FLN base
+  // - Increase FLN resources
+  def eventIsEffective(beforeState: GameState, afterState: GameState): Boolean = (
+    beforeState.govScore               > afterState.govScore               ||
+    beforeState.resources(Gov)         > afterState.resources(Gov)         ||
+    beforeState.franceTrack            < afterState.franceTrack            ||
+    beforeState.totalOnMap(_.flnBases) < afterState.totalOnMap(_.flnBases) ||
+    beforeState.resources(Fln)         < afterState.resources(Fln)
+  )
   
 
   trait Filter[T] {
@@ -250,7 +268,7 @@ object Bot {
     }
     else if (lastCube.size == 1) {
       val target = lastCube.head
-      (generic filter (sp => sp.name != target.name)) match {
+      (generic filter (_.name != target.name)) match {
         case Nil if game.guerrillasAvailable > 0 => List(SubvertCmd(true,  target.name, bestPiece(target.pieces)))
         case Nil                                 => List(SubvertCmd(false, target.name, bestPiece(target.pieces)))
         case rest                                => 
@@ -403,25 +421,19 @@ object Bot {
       }
       
       def willPlayEvent(eventState: GameState): Boolean = {
-        card.markedForFLN ||  // Always play if marked
-        card.isCapability ||  // Alwasy play if capability
-        (dieRoll < 5 && 
-           (eventState.govScore < game.govScore ||
-            eventState.franceTrack > game.franceTrack ||
-            eventState.totalOnMap(_.flnBases) > game.totalOnMap(_.flnBases) ||
-            eventState.resources(Fln) > game.resources(Fln))
-        )
+        card.flnAlwaysPlay ||
+        (eventIsEffective(game, eventState) && (card.markedForFLN || dieRoll < 5))
       }
       
-      val eventResult: Option[(GameState, TurnState, Unit)] = None 
-      // val eventResult = (if (botCanDo(Event)) card.botEventSelection() else NoEvent) match {
-      //   case NoEvent  => None
-      //   case selected => Some(tryOperations { executeEvent(selected) })
-      // }
+      // val eventResult: Option[(GameState, TurnState, Unit)] = None
+      val eventResult = (if (botCanDo(Event)) card.botEventSelection() else NoEvent) match {
+        case NoEvent  => None
+        case selected => Some(tryOperations { executeEvent(selected) })
+      }
       val terrorResult = if (terrorCandidates.nonEmpty) Some(tryOperations { doTerror() }) else None
       
       (eventResult, terrorResult) match {
-        case (Some((eventState, ts, _)), Some((terrorState, _, _))) if eventState.govScore < terrorState.govScore && willPlayEvent(eventState) =>
+        case (Some((eventState, ts, _)), Some((terrorState, _, _))) if eventState.govScore <= terrorState.govScore && willPlayEvent(eventState) =>
           showLogEntries(game, eventState)
           turnState = ts
           game = eventState
@@ -444,9 +456,9 @@ object Bot {
   }
 
   val TerrorPriorities = List(
-    new CriteriaFilter[Space]("Remove support", sp => sp.isSupport),
-    new CriteriaFilter[Space]("Add terror to neutral in final campaign", sp => sp.isNeutral && game.terrorMarkersAvailable > 0),
-    new HighestScorePriority[Space]("Highest population", sp => sp.population))
+    new CriteriaFilter[Space]("Remove support", _.isSupport),
+    new CriteriaFilter[Space]("Add terror to neutral in final campaign", _.isNeutral && game.terrorMarkersAvailable > 0),
+    new HighestScorePriority[Space]("Highest population", _.population))
   
   def doTerror(): Action = {
     def nextTerror(candidates: List[Space], num: Int): Int = {
@@ -531,7 +543,8 @@ object Bot {
         log(s"$Fln executes Attack operation with ambush: $name")
         if (!turnState.freeOperation)
           decreaseResources(Fln, 1)
-        activateHiddenGuerrillas(name, 1)
+        if (!capabilityInPlay(CapFlnCommandos))
+          activateHiddenGuerrillas(name, 1)
         removeLosses(name, attackLosses(sp.pieces, ambush))
       }
       else {
@@ -650,16 +663,16 @@ object Bot {
       new CriteriaFilter[Space]("Has 1+ active & 1+ hidden", sp => sp.activeGuerrillas > 0 && sp.hiddenGuerrillas > 0),
       new CriteriaFilter[Space]("Has 1+ active",             sp => sp.activeGuerrillas > 0))
     val UnprotectedBasePriorities: SpacePriorities = List(
-      new CriteriaFilter[Space]("In Algeria",         sp => !sp.isCountry),
-      new CriteriaFilter[Space]("With cubes",         sp => sp.totalCubes > 0),
-      new CriteriaFilter[Space]("1+ population",      sp => sp.population > 0),
-      new LowestScorePriority[Space]("Fewest hidden", sp => sp.hiddenGuerrillas))
+      new CriteriaFilter[Space]("In Algeria",         !_.isCountry),
+      new CriteriaFilter[Space]("With cubes",         _.totalCubes > 0),
+      new CriteriaFilter[Space]("1+ population",      _.population > 0),
+      new LowestScorePriority[Space]("Fewest hidden", _.hiddenGuerrillas))
     val SupportSectorPriorities: SpacePriorities = List(
-      new HighestScorePriority[Space]("Highest population", sp => sp.population))
+      new HighestScorePriority[Space]("Highest population", _.population))
     val GuerrillasNoBasePriorities: SpacePriorities = List(
-      new CriteriaFilter[Space]("In Algeria",            sp => !sp.isCountry),
-      new HighestScorePriority[Space]("Most guerrillas", sp => sp.totalGuerrillas),
-      new CriteriaFilter[Space]("No Gov cubes",          sp => sp.totalCubes == 0))
+      new CriteriaFilter[Space]("In Algeria",            !_.isCountry),
+      new HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas),
+      new CriteriaFilter[Space]("No Gov cubes",          _.totalCubes == 0))
 
     // name will be either "available" or the name of a map space
     case class ToPlace(num: Int, name: String)
@@ -748,8 +761,8 @@ object Bot {
         (sp.flnBases > 0 || willControl)
       }
       val guerrillasNoBase = (sp: Space) => !supportCity(sp)  && sp.flnBases == 0 && sp.totalGuerrillas > 0
-      val baseNoCubeCandidates   = spaceNames(game.spaces filter placeBaseNoCubes)
-      val baseWithCubeCandidates = spaceNames(game.spaces filter placeBaseWithCubes)
+      val baseNoCubeCandidates   = spaceNames(game.spaces filter onlyIn filter placeBaseNoCubes)
+      val baseWithCubeCandidates = spaceNames(game.spaces filter onlyIn filter placeBaseWithCubes)
       val canPlaceBase        = game.flnBasesAvailable > 0 && (baseNoCubeCandidates.nonEmpty || baseWithCubeCandidates.nonEmpty)
       val guerrillasWithBases = game.totalOnMap(sp => if (sp.flnBases > 0) sp.totalGuerrillas else 0)
       
@@ -830,10 +843,13 @@ object Bot {
                 // When placing guerrillas in a space with a base the final number of 
                 // guerrillas should not exceed the population of the space + 1.
                 // If it does then we will flip the active guerrillas to hidden
-                val numToPlace = if (sp.flnBases == 0)
-                  1
-                else
+                
+                val numToPlace = if (sp.flnBases > 0 )
                   (sp.flnBases + sp.population) min ((sp.population + 1) - sp.totalGuerrillas) max 0
+                else if (momentumInPlay(MoMoudjahidine))
+                  (1 + sp.population) min ((sp.population + 1) - sp.totalGuerrillas) max 0
+                else
+                  1
 
                 getGuerrillasToPlace(numToPlace, sp) match {
                   case (ToPlace(0, _), Nil) if force =>
@@ -874,10 +890,11 @@ object Bot {
         
         doRallies(baseNoCubeCandidates, PlaceBase, BasePriorities)
         doRallies(baseWithCubeCandidates, PlaceBase, BasePriorities)
-        val unprotectedBaseCandidates = spaceNames(game.spaces filter (sp => (!hasRallied(sp.name) && unprotectedBase(sp))))
+        val unprotectedBaseCandidates = spaceNames(game.spaces filter onlyIn filter (sp => (!hasRallied(sp.name) && unprotectedBase(sp))))
         doRallies(unprotectedBaseCandidates, PlaceGuerrillas, UnprotectedBasePriorities)
         // France track?
-        if (game.franceTrack < FranceTrackMax && canContinue && haveAResource()) {
+        if ((turnState.onlyIn.isEmpty || turnState.onlyIn(FranceTrackName)) &&
+            game.franceTrack < FranceTrackMax && canContinue && haveAResource()) {
           log()
           log(s"$Fln executes Rally operation: France Track")
           if (!turnState.freeOperation)
@@ -885,12 +902,12 @@ object Bot {
           increaseFranceTrack(1)
           shiftedFranceTrack = true
         }
-        val supportSectorCandidates = spaceNames(game.spaces filter (sp => (!hasRallied(sp.name) && sectorsAtSupport(sp))))
+        val supportSectorCandidates = spaceNames(game.spaces filter onlyIn filter (sp => (!hasRallied(sp.name) && sectorsAtSupport(sp))))
         doRallies(supportSectorCandidates, PlaceGuerrillas, SupportSectorPriorities)
         
         // If we have a 2+ population space were we can agitate for effect
         // then attempt to reserve resources to do so and rally in the space if not done already.
-        val agitate2popCandidates = game.algerianSpaces filter (sp => agitate2population(sp, hasRallied(sp.name)))
+        val agitate2popCandidates = game.algerianSpaces filter onlyIn filter (sp => agitate2population(sp, hasRallied(sp.name)))
         if (agitate2popCandidates.nonEmpty) {
           val choices = if (canContinue) agitate2popCandidates else agitate2popCandidates filter (sp => hasRallied(sp.name))
           val best     = choices.sortBy(sp => -sp.population).sortBy(totalAgitateCost(_)).head
@@ -906,13 +923,13 @@ object Bot {
           }
         }
 
-        val guerrillasNoBaseCandidates = spaceNames(game.spaces filter (sp => (!hasRallied(sp.name) && guerrillasNoBase(sp))))
+        val guerrillasNoBaseCandidates = spaceNames(game.spaces filter onlyIn filter (sp => (!hasRallied(sp.name) && guerrillasNoBase(sp))))
         doRallies(guerrillasNoBaseCandidates, PlaceGuerrillas, GuerrillasNoBasePriorities, numRemaining = 2)  // 2 max
 
         // If we have not yet agitated, then pick a space to agitate
         // where we can shift to neutral or oppose rallying there if necessary
         
-        val agitateForShiftCandidates = game.algerianSpaces filter (sp => agitateForShift(sp, hasRallied(sp.name)))
+        val agitateForShiftCandidates = game.algerianSpaces filter onlyIn filter (sp => agitateForShift(sp, hasRallied(sp.name)))
         if (agitateSpace.isEmpty && agitateForShiftCandidates.nonEmpty) {
           val choices = if (canContinue) agitateForShiftCandidates else agitateForShiftCandidates filter (sp => hasRallied(sp.name))
           val best     = choices.sortBy(sp => -sp.population).sortBy(totalAgitateCost(_)).head

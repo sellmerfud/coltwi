@@ -308,7 +308,10 @@ object Human {
     // there are enough police cubes.  
     def activateGuerrillas(params: Params): Unit = {
       def guerrillasActivated(sp: Space) = if (sp.isMountains)
-        (sp.totalPolice / 2) min sp.hiddenGuerrillas
+        if (capabilityInPlay(CapGovCommandos))
+          (sp.algerianPolice + (sp.frenchPolice / 2)) min sp.hiddenGuerrillas
+        else
+          (sp.totalPolice / 2) min sp.hiddenGuerrillas
       else
         sp.totalPolice min sp.hiddenGuerrillas
       val candidates = spaceNames(game.algerianSpaces filter (guerrillasActivated(_) > 0))
@@ -329,7 +332,10 @@ object Human {
     // Return adjacent spaces that contains movable troops
     def sourceSpaces(sp: Space) = spaceNames(spaces(getAdjacent(sp.name)) filter (movableTroops(_) > 0))
     def guerrillasActivated(sp: Space) = if (sp.isMountains)
-      (sp.totalCubes / 2) min sp.hiddenGuerrillas
+      if (capabilityInPlay(CapGovCommandos))
+        (sp.algerianCubes + (sp.frenchCubes / 2)) min sp.hiddenGuerrillas
+      else
+        (sp.totalCubes / 2) min sp.hiddenGuerrillas
     else
       sp.totalCubes min sp.hiddenGuerrillas
     val sweepFilter = (sp: Space) => guerrillasActivated(sp) > 0 || sourceSpaces(sp).nonEmpty
@@ -456,7 +462,9 @@ object Human {
       var assaultSpaces = Set.empty[String]
       
       def nextChoice(): Unit = {
-        val assaultCandidates: Set[String] = if (game.resources(Gov) < 2 && !params.free)
+        val assaultCandidates: Set[String] = if (capabilityInPlay(CapFlnSaS) && assaultSpaces.nonEmpty)
+          Set.empty
+        else if (game.resources(Gov) < 2 && !params.free)
           Set.empty
         else 
           params.maxSpaces match {
@@ -503,6 +511,24 @@ object Human {
       }
     
       nextChoice()
+      
+      if (assaultSpaces.nonEmpty && capabilityInPlay(CapRevenge) && game.guerrillasAvailable > 0) {
+        //  - First at assault space at Support with highest population
+        //  - Then at assault space with FLN base with highest population
+        //  - Then at random assault space with highest population
+        val candidates = (assaultSpaces map game.getSpace).toList match {
+          case xs if xs exists (_.isSupport)    => xs filter (_.isSupport)
+          case xs if xs exists (_.flnBases > 0) => xs filter (_.flnBases > 0)
+          case xs                               => xs filter (_.isSupport)
+        }
+        val priorities = List(
+          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+        
+        val sp = Bot.topPriority(candidates, priorities)
+        log(s"Fln places a guerrilla in one assault spaces due to capability: $CapRevenge")
+        placePieces(sp.name, Pieces(hiddenGuerrillas = 1))
+      }
+      
       assaultSpaces.size
     }
   }
