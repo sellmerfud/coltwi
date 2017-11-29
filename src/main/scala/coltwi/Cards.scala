@@ -40,12 +40,20 @@ object Cards {
   // Convenience method for adding a card to the deck.
   private def entry(card: Card) = (card.number -> card)
   
+  val leadershipSnatch = (sp: Space) => sp.population > 0 && sp.isFlnControlled && !sp.isOppose
+  
+  val fifthBureau = (sp: Space) => sp.population > 0 && !sp.isOppose
+  
+  val beniOuiOui = (sp: Space) => sp.terror == 0 && sp.isNeutral
+  
   val flnNavySource = (sp: Space) =>
     sp.coastal &&
     !sp.isSupport &&
     Bot.ConsiderMarch.eligibleGuerrillas(sp, true, true).total > 0
     
   val flnNavyDest = (sp: Space) => sp.coastal && sp.isSupport
+  
+  val elections = (sp: Space) => sp.isSector && sp.population > 0 && sp.isSupport
   
   val moghazniCriteria = (sp: Space) => {
     sp.isSector && sp.isSupport && sp.algerianPolice > 0 &&
@@ -81,7 +89,28 @@ object Cards {
     entry(new Card(1, "Quadrillage", Dual, false, false,
       () => NoEvent,
       (role: Role) => {
-        // Role will always be Gov
+        // Sector forces: Place up to all French Police in Available
+        // in up to 3 spaces.
+        def nextSpace(remaining: Int, candidates: List[String]): Unit = {
+          if (remaining > 0 && game.frenchPoliceAvailable > 0) {
+            val choices = List(
+              "space" -> "Select a space to place French Police",
+              "done"  -> "Finished")
+            println(s"\nFrench police in the available box: ${game.frenchPoliceAvailable}")
+            askMenu(choices).head match {
+              case "space" =>
+                val name = askCandidate("Which space: ", candidates.sorted)
+                val num  = askInt("How many French Police", 0, game.frenchPoliceAvailable)
+                placePieces(name, Pieces(frenchPolice = num))
+                nextSpace(remaining - 1, candidates filterNot (_ == name))
+              case _ =>
+            }
+          }
+        }
+        if (game.frenchPoliceAvailable > 0)
+          nextSpace(3, spaceNames(game.algerianSpaces))
+        else
+          log("There are no French Police in the available box")
       },
       (role: Role) => ()
     )),
@@ -90,15 +119,22 @@ object Cards {
     entry(new Card(2, "Balky Conscripts", Dual, false, false,
       () => NoEvent,
       (role: Role) => {
-        // Role will always be Gov
+        // Aux armes citoyens: Free Train in up to 2 selectable spaces.
+        Human.Train.execute(Human.Params(free = true, maxSpaces = Some(2)))
       },
       (role: Role) => ()
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(3, "Leadership Snatch", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(3, "Leadership Snatch", Dual, FlnMarked, AlwaysPlay,
+      () => if (game hasAlgerianSpace leadershipSnatch) Shaded else NoEvent,
+      (role: Role) => {
+        // Gotcha: Activate all Guerrillas in 1 Wilaya
+        val wilaya = askWilaya()
+        println()
+        for (sp <- game.wilayaSpaces(wilaya))
+          activateHiddenGuerrillas(sp.name, sp.hiddenGuerrillas)
+      },
       (role: Role) => {
          // Widespread rage: Set up to 2 FLN-Controlled spaces to Oppose.
         def setOppose(candidates: List[Space], remaining: Int): Unit = {
@@ -108,22 +144,79 @@ object Cards {
             setOppose(candidates filterNot (_.name == sp.name), remaining - 1)
           }
         }
-        val criteria = (sp: Space) => sp.population > 0 && sp.isFlnControlled && !sp.isOppose
-        setOppose(game.algerianSpaces filter criteria, 2)
+        setOppose(game.algerianSpaces filter leadershipSnatch, 2)
       }
     )),
     
     // ------------------------------------------------------------------------
     entry(new Card(4, "Oil & Gas Discoveries", Single, false, false,
-      () => NoEvent,
-      (role: Role) => (),
+      () => NoEvent,  // Bot never plays this event
+      (role: Role) => {
+        // Executor of the Event my add up to +2 Commitment. French cubes
+        // equal to twice the Commitment added are removed from the map or
+        // Available to out of play (Gov player's choice which cubes go)
+        val frenchCubesAvail = game.availablePieces.frenchCubes
+        val frenchCubesOnMap = game.totalOnMap(_.frenchCubes)
+        val frenchCubes      = frenchCubesAvail + frenchCubesOnMap
+        val maxNum = 2 min (frenchCubes / 2) min (EdgeTrackMax - game.commitment)
+        val numCommitment = askInt("Add how much commitment", 0, maxNum)
+        val numCubes = numCommitment * 2
+        if (numCommitment == 0) 
+          log("No commitment added.")
+        else {
+          increaseCommitment(numCommitment)
+          def removeCubes(remaining: Int): Unit = if (remaining > 0) {
+            println()
+            println(s"You must remove $remaining French cubes to out of play")
+            val frenchCubesAvail = game.availablePieces.frenchCubes
+            val frenchCubesOnMap = game.totalOnMap(_.frenchCubes)
+            val choice = {
+              if (frenchCubesAvail == 0)      "map"
+              else if (frenchCubesOnMap == 0) "avail"
+              else {
+                val choices = List("avail" -> "Remove cubes from the available box",
+                                   "map"   -> "Remove cubes from the map")
+                println("\nChoose one:")
+                askMenu(choices).head
+              }
+            }
+            
+            val numRemoved = if (choice == "avail") {
+              val num = askInt("Remove how many total cubes from available", 0, game.availablePieces.frenchCubes min remaining)
+              if (num > 0) {
+                val cubes = askPieces(game.availablePieces, num, List(FrenchPolice, FrenchTroops))
+                movePiecesFromAvailableToOutOfPlay(cubes)
+              }
+              num
+            }
+            else {
+              val name = askCandidate("Select space to remove french cubes: ", spaceNames(game.spaces filter (_.frenchCubes > 0)))
+              val sp = game.getSpace(name)
+              val num = askInt(s"Remove how many total cubes from $name", 0, sp.frenchCubes min remaining)
+              if (num > 0) {
+                val cubes = askPieces(sp.pieces, num, List(FrenchPolice, FrenchTroops))
+                removeToOutOfPlay(name, cubes)
+              }
+              num
+            }
+            removeCubes(remaining - numRemoved)
+          }
+          
+          removeCubes(numCubes)
+        }
+      },
       (role: Role) => () // Single event
     )),
     
     // ------------------------------------------------------------------------
     entry(new Card(5, "Peace of the Brave", Dual, false, false,
       () => Shaded,
-      (role: Role) => (),
+      (role: Role) => {
+        // Amnesty: Until Propaganda round, in each selected Sweep or Assault
+        // space, may also pay an extra Resource ro remove 1 Guerrilla 
+        // (may be underground, max 1 per space, removed to available)
+        playMomentum(MoPeaceOfTheBrave) // TODO: need to modify sweep and assault
+      },
       (role: Role) => {
         // Fight like hell: Free Rally in any 2 selectable spaces.
         Bot.turnState = Bot.TurnState(
@@ -137,8 +230,12 @@ object Cards {
     // ------------------------------------------------------------------------
     entry(new Card(6, "Factionalism", Dual, false, false,
       () => Shaded,
-      (role: Role) => (),
       (role: Role) => {
+        // Friction: Either remove up to 3 Guerrillas in any 1 Wilaya to Available,
+        // or move the France Track up to 2 boxes towards 'A'
+      },
+      (role: Role) => {
+        // Lube: Free Rally in any 1 selectable space with a base.
         Bot.turnState = Bot.TurnState(
           specialActivityAllowed = false,
           freeOperation          = true,
@@ -149,9 +246,13 @@ object Cards {
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(7, "5th Bureau", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(7, "5th Bureau", Dual, FlnMarked, AlwaysPlay,
+      () => if (game hasAlgerianSpace fifthBureau) Shaded else NoEvent,
+      (role: Role) => {
+        // Psychological warfare: Choose 1 Wilaya and roll 1d6; 
+        // if roll <= total guerrillas in wilaya, remove up to the number
+        // rolled from that Wilaya to available.
+      },
       (role: Role) => {
         // Propaganda flop: Shift any 2 Sectors 1 level each towards Opposition. 
        def shiftOppose(candidates: List[Space], remaining: Int): Unit = {
@@ -161,35 +262,43 @@ object Cards {
            shiftOppose(candidates filterNot (_.name == sp.name), remaining - 1)
          }
        }
-       val criteria = (sp: Space) => sp.population > 0 && !sp.isOppose
-       shiftOppose(game.algerianSpaces filter criteria, 2)
+       shiftOppose(game.algerianSpaces filter fifthBureau, 2)
       }
     )),
     
     // ------------------------------------------------------------------------
     entry(new Card(8, "Cross-border air strike", Dual, false, false,
-      () => NoEvent,
-      (role: Role) => (),
+      () => NoEvent,  // Bot never plays this event
+      (role: Role) => {
+        // Effective: Remove up to 3 Guerrillas (may be underground) from
+        // either Morocco or Tunisia.
+        if (game.moroccoTunisiaIndependent) {
+          
+        }
+        else
+          log("Morocco and Tunisia are not independent: No effect")
+      },
       (role: Role) => ()
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(9, "Beni-Oui-Oui", Single, FlnMarked, false,
-      () => Unshaded,
-      (role: Role) => if (role == Gov) {
-        
-      }
-      else { // Role == Fln
-        // Set any two non-terrorized spaces to Oppose
-       def setOppose(candidates: List[Space], remaining: Int): Unit = {
-         if (remaining > 0 && candidates.nonEmpty) {
-           val sp = Bot.topPriority(candidates, OppositionPriorities)
-           setSupport(sp.name, Oppose)
-           setOppose(candidates filterNot (_.name == sp.name), remaining - 1)
+    entry(new Card(9, "Beni-Oui-Oui", Single, FlnMarked, AlwaysPlay,
+      () => if (game hasAlgerianSpace beniOuiOui) Unshaded else NoEvent,
+      (role: Role) => {
+        // Set any two non-terrorized Neutral spaces to Support or Oppose
+        if (role == Gov) {
+          // To be done
+        }
+        else { // Role == Fln
+         def setOppose(candidates: List[Space], remaining: Int): Unit = {
+           if (remaining > 0 && candidates.nonEmpty) {
+             val sp = Bot.topPriority(candidates, OppositionPriorities)
+             setSupport(sp.name, Oppose)
+             setOppose(candidates filterNot (_.name == sp.name), remaining - 1)
+           }
          }
-       }
-       val criteria = (sp: Space) => sp.terror == 0 && !sp.isOppose
-       setOppose(game.algerianSpaces filter criteria, 2)
+         setOppose(game.algerianSpaces filter beniOuiOui, 2)
+        }
       },
       (role: Role) => () // Single event
     )),
@@ -197,7 +306,9 @@ object Cards {
     // ------------------------------------------------------------------------
     entry(new Card(10, "Moudjahidine", Dual, FlnMarked, AlwaysPlay,
       () => Shaded,
-      (role: Role) => (),
+      (role: Role) => {
+        // Braggadocio: Activate all Guerrillas in 1 Wilaya
+      },
       (role: Role) => {
         // Sign me up: Until Propaganda Round, treat each Rally in a FLN-Con-trolled
         // space with no Base as if it contained 1 Base.
@@ -206,9 +317,13 @@ object Cards {
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(11, "Bananes", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(11, "Bananes", Dual, FlnMarked, AlwaysPlay,
+      () => if (game.commitment > 0) Shaded else NoEvent,
+      (role: Role) => {
+        // H-21 helicopters: Until Propaganda round, raise number
+        // of troop lift spaces by 2
+        playMomentum(MoBananes)
+      },
       (role: Role) => {
         // Misguided airstrike incident
         decreaseCommitment(1)
@@ -226,8 +341,14 @@ object Cards {
         else
           NoEvent
       },
-      (role: Role) => (),
       (role: Role) => {
+        // S-55 helicopters: Until Propaganda round, raise number of 
+        // troop lift spaces by 1
+        playMomentum(MoVentilos)
+      },
+      (role: Role) => {
+        // FLN Navy: May redistribute 1-3 guerrillas (1d6 halved, round up)
+        // among any 3 coastal spaces for free.  Guerrillas do no activate.
         val die = dieRoll
         val num = (die + 1) / 2   // Half rounded up
         
@@ -271,9 +392,11 @@ object Cards {
     entry(new Card(13, "SAS", Dual, false, AlwaysPlay,
       () => Shaded,
       (role: Role) => {
+        // Hearts and Minds: Train may Pacify in up to 2 selectable spaces.
         playCapability(CapGovSaS)
       },
       (role: Role) => {
+        // Caution: Assault my target only 1 space per card.
         playCapability(CapFlnSaS)
       }
     )),
@@ -282,6 +405,8 @@ object Cards {
     entry(new Card(14, "Protest in Paris", Single, FlnMarked, AlwaysPlay,
       () => if (game.franceTrack < FranceTrackMax) Shaded else NoEvent,
       (role: Role) => {
+        // Executor of Event may move France Track marker up to 2 spaces
+        // left or right
         if (role == Gov)
           decreaseFranceTrack(2)
         else
@@ -306,8 +431,11 @@ object Cards {
     
     // ------------------------------------------------------------------------
     entry(new Card(16, "NATO", Dual, false, false,
-      () => NoEvent,  // Would never be "effective" so never executed
-      (role: Role) => (),
+      () => NoEvent,  // Bot never plays this event
+      (role: Role) => {
+        // Force de Frappe releases conventional troops: 
+        // Move 1d6 French cubes from Out of Play to Available.
+      },
       (role: Role) => ()
     )),
     
@@ -315,9 +443,12 @@ object Cards {
     entry(new Card(17, "Commandos", Dual, false, AlwaysPlay,
       () => Shaded,
       (role: Role) => {
+        // Commandos de Chasse: Each Algerian cube participating in
+        // a Garrison or Sweep in a Mountain sector activates 1 guerrilla.
         playCapability(CapGovCommandos)
       },
       (role: Role) => {
+        // Zonal Commandos: Ambush does not Activate the Guerrilla.
         playCapability(CapFlnCommandos)
       }
     )),
@@ -326,17 +457,26 @@ object Cards {
     entry(new Card(18, "Torture", Single, FlnMarked, AlwaysPlay,
       () => Unshaded,
       (role: Role) => {
+        // -1 Commitment for each Neutralize executed. In each selected
+        // Neutralize space, may remove 1 additional piece, which may be
+        // underground.  (Guerrillas before bases rule still applies)
+        // Removed Guerrilla goes to Available or Casualties depending 
+        // sequence.
         playCapability(CapTorture)
       },
       (role: Role) => () // Single event
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(19, "General Strike", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(19, "General Strike", Dual, FlnMarked, AlwaysPlay,
+      () => if (game.resources(Fln) < EdgeTrackMax) Shaded else NoEvent,
       (role: Role) => {
-        // United Nations resolution condemning violence raises FLN profile: +2 FLN Resources
+        // Heads broken: Set 1 selected City to Neutral. 
+        // Add commitment = population of city
+      },
+      (role: Role) => {
+        // United Nations resolution condemning violence
+        // raises FLN profile: +2 FLN Resources
         increaseResources(Fln, 2)
       }
     )),
@@ -346,52 +486,70 @@ object Cards {
     // Choose Op(+SA)
     entry(new Card(20, "Suave qui peut", Single, FlnMarked, false,
       () => NoEvent,  // Bot never plays this event
-      (role: Role) => (),
+      (role: Role) => {
+        // Defections and desertions: Executor of Event may remove up to 3
+        // Guerrillas or Algerian Police to available, pay 1 resource each.
+        
+      },
       (role: Role) => () // Single event
     )),
     
     // ------------------------------------------------------------------------
     entry(new Card(21, "United Nations Resolution", Dual, false, false,
-      () => Shaded,
+      () => if (game.commitment > 0) Shaded else NoEvent,
       (role: Role) => {
-        // Mind your own business!
+        // Mind your own business! +1 Commitment
         increaseCommitment(1)
       },
       (role: Role) => {
-        // Binding
+        // Binding: -1 Commitment
         decreaseCommitment(1)
       }
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(22, "The Government of USA is Convinced...", Dual, FlnMarked, false,
-      () => Shaded,
+    entry(new Card(22, "The Government of USA is Convinced...", Dual, FlnMarked, AlwaysPlay,
+      () => if (game.commitment > 0) Shaded else NoEvent,
       (role: Role) => {
-        // FLN are Communists
+        // FLN are Communists: +2 Commitment
         increaseCommitment(2)
       },
       (role: Role) => {
-        // Algeria is entitled to self-determination
+        // Algeria is entitled to self-determination: -2 Commitment
         decreaseCommitment(2)
       }
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(23, "Diplomatic Leanings", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(23, "Diplomatic Leanings", Dual, FlnMarked, AlwaysPlay,
+      () => if (game.resources(Fln) < EdgeTrackMax) Shaded else NoEvent,
       (role: Role) => {
-        // Arab Bloc solidarity
+        // Pressure on protectorates: Remove up to 1 base in each
+        // of Morocco and Tunisia. (If independent). No increase in
+        // Commitment.
+        if (game.moroccoTunisiaIndependent) {
+          // To be done
+        }
+        else
+          log("Morocco and Tunisia are not independent: No effect")
+      },
+      (role: Role) => {
+        // Arab Bloc solidarity: +6 FLN resources
         increaseResources(Fln, 6)
       }
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(24, "Economic Development", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(24, "Economic Development", Dual, FlnMarked, AlwaysPlay,
+      () => if (game.resources(Gov) > 0) Shaded else NoEvent,
       (role: Role) => {
-        // Military funds diverted to social enterprises
+        // Constantine Plan: Set up to 2 Government controlled spaces
+        // to Support
+        
+      },
+      (role: Role) => {
+        // Military funds diverted to social enterprises:
+        // -6 government resources
         decreaseResources(Gov, 6)
       }
     )),
@@ -399,43 +557,49 @@ object Cards {
     // ------------------------------------------------------------------------
     entry(new Card(25, "Purge", Single, false, false,
       () => Unshaded,
-      (role: Role) => if (role == Gov) {
-        // To be done.
-      }
-      else {
+      (role: Role) => {
+        // Disloyal commanders: 1-3 enemy pieces (1d6 halved, round up,
+        // executor's choice, but not bases) moved from map to Available;
+        // And -1d6 enemy resources
         val piecesDie = dieRoll
         val numPieces = (piecesDie + 1) / 2
         val resourcesDie = dieRoll
-        val numRemoved = 0
-        val basePriorities = List(
-          new Bot.CriteriaFilter[Space]("Has FLN Base", _.flnBases > 0),
-          new Bot.LowestScorePriority[Space]("Least guerrillas", _.totalGuerrillas))
-        val otherPriorities = List(
-          new Bot.CriteriaFilter[Space]("Guerrilla present", _.totalGuerrillas > 0),
-          new Bot.CriteriaFilter[Space]("Gov control", _.isGovControlled),
-          new Bot.HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas))
-        
-        log(s"Die roll for pieces is $piecesDie.  $Fln may move up to $numPieces enemy pieces")
-        def doRemove(candiates: List[Space], pieceType: PieceType): Unit = {
-          if (numRemoved < numPieces && candiates.nonEmpty) {
-            val sp = if (candiates exists (_.flnBases > 0))
-              Bot.topPriority(candiates, basePriorities)
-            else
-              Bot.topPriority(candiates, otherPriorities)
-            val num = (numPieces - numRemoved) min sp.pieces.numOf(pieceType)
-            removeToAvailableFrom(sp.name, Pieces().set(num, pieceType))
-            doRemove(candiates filterNot(_.name == sp.name), pieceType)
-          }
+        if (role == Gov) {
+          // To be done.
         }
+        else {
+          var numRemoved = 0
+          val basePriorities = List(
+            new Bot.CriteriaFilter[Space]("Has FLN Base", _.flnBases > 0),
+            new Bot.LowestScorePriority[Space]("Least guerrillas", _.totalGuerrillas))
+          val otherPriorities = List(
+            new Bot.CriteriaFilter[Space]("Guerrilla present", _.totalGuerrillas > 0),
+            new Bot.CriteriaFilter[Space]("Gov control", _.isGovControlled),
+            new Bot.HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas))
         
-        // French before Algerians, then or within that, Troops before Police.
-        doRemove(game.algerianSpaces filter (_.frenchTroops   > 0), FrenchTroops)
-        doRemove(game.algerianSpaces filter (_.frenchPolice   > 0), FrenchPolice)
-        doRemove(game.algerianSpaces filter (_.algerianTroops > 0), AlgerianTroops)
-        doRemove(game.algerianSpaces filter (_.algerianPolice > 0), AlgerianPolice)
+          log(s"Die roll for pieces is $piecesDie.  $Fln may move up to $numPieces enemy pieces")
+          def doRemove(candiates: List[Space], pieceType: PieceType): Unit = {
+            if (numRemoved < numPieces && candiates.nonEmpty) {
+              val sp = if (candiates exists (_.flnBases > 0))
+                Bot.topPriority(candiates, basePriorities)
+              else
+                Bot.topPriority(candiates, otherPriorities)
+              val num = (numPieces - numRemoved) min sp.pieces.numOf(pieceType)
+              numRemoved += num
+              removeToAvailableFrom(sp.name, Pieces().set(num, pieceType))
+              doRemove(candiates filterNot(_.name == sp.name), pieceType)
+            }
+          }
+        
+          // French before Algerians, then or within that, Troops before Police.
+          doRemove(game.algerianSpaces filter (_.frenchTroops   > 0), FrenchTroops)
+          doRemove(game.algerianSpaces filter (_.frenchPolice   > 0), FrenchPolice)
+          doRemove(game.algerianSpaces filter (_.algerianTroops > 0), AlgerianTroops)
+          doRemove(game.algerianSpaces filter (_.algerianPolice > 0), AlgerianPolice)
           
-        log(s"Die roll for resources is $resourcesDie")
-        decreaseResources(Gov, resourcesDie)
+          log(s"Die roll for resources is $resourcesDie")
+          decreaseResources(Gov, resourcesDie)
+        }
       },
       (role: Role) => () // Single event
     )),
@@ -443,15 +607,20 @@ object Cards {
     // ------------------------------------------------------------------------
     entry(new Card(26, "Casbah", Dual, FlnMarked, AlwaysPlay,    
       () => if (Bot.getGuerrillasToPlace(4, game.getSpace(Algiers)).total > 0) Shaded else NoEvent,
-      (role: Role) => (),
       (role: Role) => {
-        // Urban uprising
+        // Ratonade: Remove up to all FLN pieces in Algiers to Available.
+        // +1 Commitment per base removed.  +1 FLN resource for each piece
+        // removed.
+        
+      },
+      (role: Role) => {
+        // Urban uprising: Place up to 4 Guerrillas in Algiers.  If this makes
+        // Algiers FLN-controlled, may Agitage up to 1 level for free.
+        // (Remove 1 terror marker or if there are no terror markers 
+        //  shift 1 level toward Oppose)
         val toPlace = Bot.getGuerrillasToPlace(4, game.getSpace(Algiers))
         Bot.placeGuerrillas(Algiers, toPlace)
         
-        // If Algiers is now FLN controlled free agitate 1 "level"
-        // Remove 1 terror marker or
-        // if there are no terror markers will shift 1 level toward Oppose
         val sp = game.getSpace(Algiers)
         if (sp.isFlnControlled && sp.terror > 0)
           removeTerror(Algiers, 1)
@@ -464,9 +633,14 @@ object Cards {
     entry(new Card(27, "Covert Movement", Dual, false, AlwaysPlay,
       () => Shaded,
       (role: Role) => {
+        // Dead Zones: FLN Guerrillas may not march again if in 
+        // the same Wilaya.
         playCapability(CapDeadZones)
       },
       (role: Role) => {
+        // Cross-Wilaya coordination: In Redeploy phase of Propaganda round,
+        // Guerillas may move from any spaces to any spaces with friendly bases.
+        // All spaces must be in Algeria.
         playCapability(CapXWilayaCoord)
       }
     )),
@@ -480,6 +654,11 @@ object Cards {
             else
               NoEvent
       ,
+      // Executor of Event may place up to 2 Terror markers, placed
+      // after paying 1 resource per marker, in any spaces in Algeria
+      // (even if terror already present)
+      // Set these spaces to Neutral, -1 Commitment for each terror marker
+      // placed (no matter who executed the event)
       (role: Role) => if (role == Gov) {
         // To do
       }
@@ -515,13 +694,19 @@ object Cards {
     // ------------------------------------------------------------------------
     entry(new Card(29, "The Call Up", Dual, false, false,
       () => NoEvent,  // Fln does not play unmarked momentum events
-      (role: Role) => (),
+      (role: Role) => {
+        // Bonjour M. Bidasse: Move any number of French Police from 
+        // Out of Play to Available.  Subtract Commitment = 1/3 of
+        // total moved (round down)
+      },
       (role: Role) => ()
     )),
     
     // ------------------------------------------------------------------------
     entry(new Card(30, "Change in Tactics", Single, false, AlwaysPlay,
       () => if (game.capabilities exists (_.startsWith("Gov:"))) Unshaded else NoEvent,
+      // Remove any 1 Capability marker that is in effect.
+      // That capability no longer applies.
       (role: Role) => if (role == Gov) {
         // To be done
       }
@@ -533,10 +718,16 @@ object Cards {
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(31, "Intimidation", Dual, FlnMarked, false,
-      () => Shaded,
-      (role: Role) => (),
+    entry(new Card(31, "Intimidation", Dual, FlnMarked, AlwaysPlay,
+      () => if (game.resources(Fln) < EdgeTrackMax) Shaded else NoEvent,
       (role: Role) => {
+        // Empty Threat: Until Propaganda round, Terror places 
+        // marker but does not set space to Neutral.
+        playMomentum(MoIntimidation)
+      },
+      (role: Role) => {
+        // Persuasive donation drive: Add FLN resources equal to the
+        // number indicated by the marker in the France Track
         val entry = FranceTrack(game.franceTrack)
         increaseResources(Fln, entry.resource)
       }
@@ -546,9 +737,12 @@ object Cards {
     entry(new Card(32, "Teleb the Bomb-maker", Dual, false, AlwaysPlay,
       () => Shaded,
       (role: Role) => {
+        // Amateurs: Terror in City requires Activation of
+        // 2 underground guerrillas.
         playCapability(CapAmateurBomber)
       },
       (role: Role) => {
+        // Effective: Terror in City costs 0 resources
         playCapability(CapEffectiveBomber)
         
       }
@@ -576,8 +770,8 @@ object Cards {
     )),
     
     // ------------------------------------------------------------------------
-    entry(new Card(34, "Elections", Dual, FlnMarked, false,
-      () => Shaded,
+    entry(new Card(34, "Elections", Dual, FlnMarked, AlwaysPlay,
+      () => if (game hasAlgerianSpace elections) Shaded else NoEvent,
       (role: Role) => {
         // Integrationist mandate: +1 Commitment or set 1 non-terrorized 
         // Neutral space to Support
@@ -588,7 +782,7 @@ object Cards {
           new Bot.HighestScorePriority[Space]("Highest population", _.population),
           new Bot.CriteriaFilter[Space]("Gov cannot train", sp => !sp.canTrain))
         
-        val candidates = game.algerianSpaces filter (sp => sp.population > 0 && sp.isSupport)
+        val candidates = game.algerianSpaces filter elections
         if (candidates.nonEmpty) {
           val sp = Bot.topPriority(candidates, priorities)
           setSupport(sp.name, Neutral)
@@ -646,7 +840,7 @@ object Cards {
     
     // ------------------------------------------------------------------------
     entry(new Card(38, "Economic Crisis in France", Dual, false, false,
-      () => Shaded,
+      () => if (game.resources(Gov) > 0 || game.commitment > 0) Shaded else NoEvent,
       (role: Role) => {
         // Expatriate donations down: -1d6 FLN resources
         decreaseResources(Fln, dieRoll)
@@ -680,7 +874,7 @@ object Cards {
     
     // ------------------------------------------------------------------------
     entry(new Card(41, "Egypt", Dual, FlnMarked, AlwaysPlay,
-      () => Shaded,
+      () => if (game.resources(Fln) < EdgeTrackMax) Shaded else NoEvent,
       (role: Role) => {
         // Get out of Cairo: -3 FLN resources
         decreaseResources(Fln, 3)
@@ -693,7 +887,7 @@ object Cards {
     
     // ------------------------------------------------------------------------
     entry(new Card(42, "Czech Arms Deal", Dual, FlnMarked, AlwaysPlay,
-      () => Shaded,
+      () => if (game.resources(Fln) < EdgeTrackMax) Shaded else NoEvent,
       (role: Role) => {
         // Intercepted: Subtract FLN resources = twice the current Border Zone Status
         // (subtract 2 if Morocco and Tunisia no yet independent)
@@ -758,6 +952,8 @@ object Cards {
         playMomentum(MoMoghazni)
       },
       (role: Role) => {
+        // Force K: Replace up to all Algerian Police in any 1 sector with
+        // an equal number of Guerrillas.
         val priorities = List(
           new Bot.HighestScorePriority[Space]("Most alerian police", _.algerianPolice),
           new Bot.HighestScorePriority[Space]("Most Fln pieces", _.totalFln),
@@ -1014,7 +1210,7 @@ object Cards {
     
     // ------------------------------------------------------------------------
     entry(new Card(57, "Peace Talks", Single, FlnMarked, AlwaysPlay,
-      () => NoEvent,
+      () => Unshaded,
       (role: Role) => {
         // Play nice, now: Until Propaganda round: Government may not
         // Assault.  FLN may not Attack.
@@ -1040,6 +1236,8 @@ object Cards {
         }
       },
       (role: Role) => {
+        // Strengthen government-in-exile:  Place 1 Base in Morocco or Tunisia
+        // if stacking permits
         val sp = shuffle(spaces(Morocco :: Tunisia :: Nil) filter (_.canTakeBase) sortBy (_.flnBases)).head
         placePieces(sp.name, Pieces(flnBases = 1))
       }

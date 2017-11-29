@@ -163,10 +163,11 @@ object Bot {
   // Place guerrillas from available.  First removing any from
   // the map if necessary.
   def placeGuerrillas(spaceName: String, guerrillas: GuerrillasToPlace): Unit = {
+    placePieces(spaceName, Pieces(hiddenGuerrillas = guerrillas.numAvailable))
     guerrillas.fromMap foreach { case FromMap(n, name) => 
       removeToAvailableFrom(name, Pieces(activeGuerrillas = n))
+      placePieces(spaceName, Pieces(hiddenGuerrillas = n))
     }
-    placePieces(spaceName, Pieces(hiddenGuerrillas = guerrillas.total))
   }
     
 
@@ -290,7 +291,8 @@ object Bot {
   def terrorCandidates = game.algerianSpaces filter { sp =>
     sp.population > 0 &&
     hasSafeHiddenGuerrilla(sp) && 
-    (sp.isSupport || (game.isFinalCampaign && sp.isNeutral && sp.terror == 0 && sp.canTrain))
+    ((sp.isSupport && !momentumInPlay(MoIntimidation)) || 
+     (game.isFinalCampaign && sp.isNeutral && sp.terror == 0 && sp.canTrain))
   }  
   
   case class SubvertCmd(replace: Boolean, name: String, pieces: Pieces)
@@ -465,11 +467,14 @@ object Bot {
       
       def executeEvent(which: EventSelection): Unit = {
         if (which == Unshaded) {
-          log(s"\nFLN chooses: Unshaded event")
+          if (card.dual == false)
+            log(s"\nFLN executes the event")
+          else
+            log(s"\nFLN executes the Unshaded event")
           card.executeUnshaded(Fln)
         }
         else {
-          log(s"\nFLN chooses: Shaded event")
+          log(s"\nFLN executes the Shaded event")
           card.executeShaded(Fln)
         }
       }
@@ -479,12 +484,18 @@ object Bot {
         (eventIsEffective(game, eventState) && (card.markedForFLN || dieRoll < 5))
       }
       
-      // val eventResult: Option[(GameState, TurnState, Unit)] = None
-      val eventResult = (if (botCanDo(Event)) card.botEventSelection() else NoEvent) match {
-        case NoEvent  => None
-        case selected => Some(tryOperations { executeEvent(selected) })
-      }
-      val terrorResult = if (terrorCandidates.nonEmpty) Some(tryOperations { doTerror() }) else None
+      val terrorResult = if (terrorCandidates.isEmpty)
+        None
+      else
+        Some(tryOperations { doTerror() })
+      
+      val eventResult = if (botCanDo(Event) == false)
+        None
+      else
+        card.botEventSelection() match {
+          case NoEvent  => None
+          case selected => Some(tryOperations { executeEvent(selected) })
+        }
       
       (eventResult, terrorResult) match {
         case (Some((eventState, ts, _)), Some((terrorState, _, _))) if eventState.govScore <= terrorState.govScore && willPlayEvent(eventState) =>
@@ -539,7 +550,8 @@ object Bot {
           activateHiddenGuerrillas(target.name, 1)
           if (target.terror == 0 && game.terrorMarkersAvailable > 0)
             addTerror(target.name, 1)
-          setSupport(target.name, Neutral)
+          if (!momentumInPlay(MoIntimidation))
+            setSupport(target.name, Neutral)
         
           nextTerror(candidates filterNot (_.name == target.name), num + 1)
         }

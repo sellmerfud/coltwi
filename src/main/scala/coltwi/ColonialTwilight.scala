@@ -512,14 +512,14 @@ object ColonialTwilight {
     def sweepHasEffect = pieces.hiddenGuerrillas > 0 &&
                          ((isMountains && pieces.totalCubes > 1) || (pieces.totalCubes > 0))
                        
-    val prohibitedTrainSector = momentumInPlay(MoHardendAttitudes) && isSector && !isSupport  
+    def prohibitedTrainSector = momentumInPlay(MoHardendAttitudes) && isSector && !isSupport  
     
-    val normalTrain         = isCity || hasGovBase
-    val recallDeGaulleTrain = isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0
-    val moghazniTrain       = momentumInPlay(MoMoghazni) && isSector && isSupport && isGovControlled
+    def normalTrain         = isCity || hasGovBase
+    def recallDeGaulleTrain = isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0
+    def moghazniTrain       = momentumInPlay(MoMoghazni) && isSector && isSupport && isGovControlled
     
-    val canTrain          = (normalTrain || recallDeGaulleTrain || moghazniTrain) && !prohibitedTrainSector
-    val moghazniTrainOnly = moghazniTrain && !(normalTrain || recallDeGaulleTrain)
+    def canTrain          = (normalTrain || recallDeGaulleTrain || moghazniTrain) && !prohibitedTrainSector
+    def moghazniTrainOnly = moghazniTrain && !(normalTrain || recallDeGaulleTrain)
   }
   
   // Default empty spaces
@@ -1280,6 +1280,17 @@ object ColonialTwilight {
     }
   }
   
+  def askWilaya(prompt: String = "\nSelect Wilaya: ", allowAbort: Boolean = true): String = {
+    val choices = List(
+      "I"   -> "Wilaya I",
+      "II"  -> "Wilaya II",
+      "III" -> "Wilaya III",
+      "IV"  -> "Wilaya IV",
+      "V"   -> "Wilaya V",
+      "VI"  -> "Wilaya VI")
+    println(prompt)
+    askMenu(choices).head
+  }
   
   // Ask the user to select a number of pieces. 
   // The type of pieces allowed for selection may be limited by passing a list of those
@@ -1298,7 +1309,7 @@ object ColonialTwilight {
         println()
         heading foreach println
         println(s"Select ${amountOf(numPieces, "piece")} among the following:")
-        println(available.toString)
+        wrap("  ", available.stringItems) foreach println
         println()
       
         def nextType(types: List[PieceType]): Unit = {
@@ -1432,6 +1443,46 @@ object ColonialTwilight {
     log(s"\nPlace the following pieces from the available box into $spaceName:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     logControlChange(sp, updated)
+  }
+  
+  // Place pieces the available box into the out of play box.
+  // There must be enough pieces in the out of play box or an exception is thrown.
+  def movePiecesFromAvailableToOutOfPlay(pieces: Pieces): Unit = if (pieces.total > 0) {
+    assert(
+      game.availablePieces.frenchTroops     >= pieces.frenchTroops &&
+      game.availablePieces.frenchPolice     >= pieces.frenchPolice &&
+      game.availablePieces.algerianTroops   >= pieces.algerianTroops &&
+      game.availablePieces.algerianPolice   >= pieces.algerianPolice &&
+      game.availablePieces.hiddenGuerrillas >= pieces.hiddenGuerrillas &&
+      game.availablePieces.activeGuerrillas >= pieces.activeGuerrillas &&
+      game.availablePieces.govBases         >= pieces.govBases &&
+      game.availablePieces.flnBases         >= pieces.flnBases,
+      "Insufficent pieces in the available box"
+    )
+    
+    game = game.copy(outOfPlay = game.outOfPlay + pieces)
+    log(s"\nPlace the following pieces from the available box in the out of play box")
+    wrap("  ", pieces.stringItems) foreach (log(_))
+  }
+  
+  // Place pieces from the Out Of Play box into the available box.
+  // There must be enough pieces in the out of play box or an exception is thrown.
+  def movePiecesFromOutOfPlayToAvailable(pieces: Pieces): Unit = if (pieces.total > 0) {
+    assert(
+      game.outOfPlay.frenchTroops     >= pieces.frenchTroops &&
+      game.outOfPlay.frenchPolice     >= pieces.frenchPolice &&
+      game.outOfPlay.algerianTroops   >= pieces.algerianTroops &&
+      game.outOfPlay.algerianPolice   >= pieces.algerianPolice &&
+      game.outOfPlay.hiddenGuerrillas >= pieces.hiddenGuerrillas &&
+      game.outOfPlay.activeGuerrillas >= pieces.activeGuerrillas &&
+      game.outOfPlay.govBases         >= pieces.govBases &&
+      game.outOfPlay.flnBases         >= pieces.flnBases,
+      "Insufficent pieces in the out of play box"
+    )
+    
+    game = game.copy(outOfPlay = game.outOfPlay - pieces)
+    log(s"\nPlace the following pieces from out of play into the available box")
+    wrap("  ", pieces.stringItems) foreach (log(_))
   }
   
   // Place pieces from the Out Of Play box in the given map space.
@@ -1875,7 +1926,7 @@ object ColonialTwilight {
         val cmds    = List(PlayCardCmd)
         val opts = orList((cmds map (_.name)) :+ "?")
         val prompt  = s"""
-                      |>>> Turn ${game.turn}  (Event card notice yet played) <<<
+                      |>>> Turn ${game.turn}  (Event card not yet played) <<<
                       |${separator()}
                       |Command ($opts): """.stripMargin
         

@@ -137,7 +137,12 @@ object Human {
         println(s"$Gov Train operation")
         println(separator(char = '='))
         wrap("spaces trained: ", trainSpaces.toList.sorted(TrainingSpaceOrdering)) foreach println
-        println(s"\nChoose one (${amtRes(Gov)} remaining):")
+        if (params.free && params.maxSpaces.nonEmpty)
+          println(s"\nChoose one: (${amountOf(params.maxSpaces.get - trainSpaces.size, "space")} remaining):")
+        else if (params.free)
+          println(s"\nChoose one:")
+        else
+          println(s"\nChoose one (${amtRes(Gov)} remaining):")
         askMenu(choices, allowAbort = false).head match {
           case "space" =>
             askCandidateAllowNone(s"\nChoose space to Train: ", candidateSpaces.toList.sorted(TrainingSpaceOrdering)) foreach { spaceName =>
@@ -914,7 +919,11 @@ object Human {
   }
   
   def executeEvent(): Unit = {
-    
+    // For now we only allow the Gov to execute the Unshaded
+    // event.  It is rare that the Gov would want to execute
+    // a shaded event so I have not implemented them.
+    log(s"$Gov executes the Unshaded event")
+    deck(game.currentCard.get).executeUnshaded(Gov)
   }
   
   // A human player has opted to take an action on the current card.
