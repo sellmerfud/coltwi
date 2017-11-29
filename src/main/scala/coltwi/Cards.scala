@@ -340,12 +340,28 @@ object Cards {
       () => NoEvent,  // Bot never plays this event
       (role: Role) => {
         // Effective: Remove up to 3 Guerrillas (may be underground) from
-        // either Morocco or Tunisia.
+        // either Morocco or Tunisia to available.
         if (game.moroccoTunisiaIndependent) {
+          val morocco = game.getSpace(Morocco)
+          val tunisia = game.getSpace(Tunisia)
+          val country = if (morocco.totalGuerrillas == 0 && tunisia.totalGuerrillas == 0) "none"
+          else if (morocco.totalGuerrillas == 0) Tunisia
+          else if (tunisia.totalGuerrillas == 0) Morocco
+          else {
+            println("\nRemove guerrillas from which country:")
+            askMenu(List(Morocco -> Morocco, Tunisia -> Tunisia)).head
+          }
           
+          if (country == "none")
+            log("No guerrillas in Morocco or Tunisia. The event has no effect")
+          else {
+            val sp = game.getSpace(country)
+            val guerrillas = askPieces(sp.pieces, 3 min sp.totalGuerrillas, GUERRILLAS)
+            removeToAvailableFrom(country, guerrillas)
+          }
         }
         else
-          log("Morocco and Tunisia are not independent: No effect")
+          log("Morocco and Tunisia are not independent. The event has no effect")
       },
       (role: Role) => ()
     )),
@@ -356,7 +372,20 @@ object Cards {
       (role: Role) => {
         // Set any two non-terrorized Neutral spaces to Support or Oppose
         if (role == Gov) {
-          // To be done
+          def affectNeutral(candidates: List[String], remaining: Int): Unit = {
+            if (remaining > 0 && candidates.nonEmpty) {
+              println()
+              val name = askCandidate("Select a non-terrorized neutral space: ", candidates.sorted)
+              val choices  = List("support" -> s"Set $name to Support", "oppose" -> s"Set $name to Opposition")
+              setSupport(name, if (askMenu(choices).head == "support") Support else Oppose)
+              affectNeutral(candidates filterNot (_ == name), remaining - 1)
+            }
+          }
+          val candidates = spaceNames(game.algerianSpaces filter beniOuiOui)
+          if (candidates.isEmpty)
+            log("No non-terrorized neutral spaces. The event has no effect")
+          else
+            affectNeutral(candidates, 2)
         }
         else { // Role == Fln
          def setOppose(candidates: List[Space], remaining: Int): Unit = {
