@@ -231,6 +231,42 @@ object Cards {
       (role: Role) => {
         // Friction: Either remove up to 3 Guerrillas in any 1 Wilaya to Available,
         // or move the France Track up to 2 boxes towards 'A'
+        val guerrillaInAlgeria = game hasAlgerianSpace (_.totalGuerrillas > 0)
+        val choice = if (game.franceTrack > 0 && guerrillaInAlgeria) {
+          val choices = List(
+            "france" -> "Shift the France track 2 boxes towards 'A'",
+            "wilaya" -> "Remove up to 3 Guerrillas in any 1 Wilaya")
+          println("\nChoose one:")
+          askMenu(choices).head
+        }
+        else if (game.franceTrack > 0) "france"
+        else if (guerrillaInAlgeria)   "wilaya"
+        else "no-effect"
+          
+        choice match {
+          case "france" =>
+            decreaseFranceTrack(2 min game.franceTrack)
+          case "wilaya" =>
+            val withGuerrillas = (game.algerianSpaces filter (_.totalGuerrillas > 0) map (_.wilaya)).toSet
+            val wilaya = askWilaya(allowed = withGuerrillas)
+            def removeGuerrillas(remaining: Int): Unit = {
+              val candidates = spaceNames(game.wilayaSpaces(wilaya) filter (_.totalGuerrillas > 0))
+              if (remaining > 0  && candidates.nonEmpty) {
+                val name = askCandidate(s"Select space in Wilaya $wilaya: ", candidates.sorted)
+                val sp = game.getSpace(name)
+                val num = askInt(s"Remove how many guerrillas from $name", 0, remaining min sp.totalGuerrillas)
+                if (num > 0) {
+                  val guerrillas = askPieces(sp.pieces, num, GUERRILLAS)
+                  removeToAvailableFrom(name, guerrillas)
+                }
+                removeGuerrillas(remaining - num)
+              }
+            }
+            
+            removeGuerrillas(3 min (game.wilayaSpaces(wilaya) map (_.totalGuerrillas)).sum)
+          case _        =>
+            log("The event has no effect")
+        }
       },
       (role: Role) => {
         // Lube: Free Rally in any 1 selectable space with a base.

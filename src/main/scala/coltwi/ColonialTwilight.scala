@@ -1286,16 +1286,19 @@ object ColonialTwilight {
     }
   }
   
-  def askWilaya(prompt: String = "\nSelect Wilaya: ", allowAbort: Boolean = true): String = {
-    val choices = List(
-      "I"   -> "Wilaya I",
-      "II"  -> "Wilaya II",
-      "III" -> "Wilaya III",
-      "IV"  -> "Wilaya IV",
-      "V"   -> "Wilaya V",
-      "VI"  -> "Wilaya VI")
-    println(prompt)
-    askMenu(choices).head
+  val ALL_WILAYAS = Set("I", "II", "III", "IV", "V", "VI")
+
+  def askWilaya(prompt: String = "\nSelect Wilaya: ", allowed: Set[String] = ALL_WILAYAS, allowAbort: Boolean = true): String = {
+    val choices = List("I", "II", "III", "IV", "V", "VI") flatMap { wilaya =>
+      if (allowed(wilaya)) Some(wilaya -> s"Wilaya $wilaya") else None
+    }
+    assert(choices.nonEmpty, "askWilaya: allowed set does not contain at least one valid wilaya")
+    if (choices.size == 1)
+      choices.head._1
+    else {
+      println(prompt)
+      askMenu(choices).head
+    }
   }
   
   // Ask the user to select a number of pieces. 
