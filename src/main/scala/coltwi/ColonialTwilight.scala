@@ -283,6 +283,12 @@ object ColonialTwilight {
                       HiddenGuerrillas, ActiveGuerrillas, GovBases, FlnBases)
   
   val FLNPieces = Set[PieceType](HiddenGuerrillas, ActiveGuerrillas, FlnBases)
+  val TROOPS       = List(FrenchTroops, AlgerianTroops)
+  val POLICE       = List(FrenchPolice, AlgerianPolice)
+  val FRENCH_CUBES = List(FrenchPolice, FrenchTroops)
+  val GUERRILLAS   = List(HiddenGuerrillas, ActiveGuerrillas)
+  
+  
   def owner(t: PieceType) = if (FLNPieces contains t) Fln else Gov
     
   // Class used to keep track of the pieces in a particular space

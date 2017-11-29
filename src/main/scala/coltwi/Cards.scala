@@ -155,21 +155,19 @@ object Cards {
         // Executor of the Event my add up to +2 Commitment. French cubes
         // equal to twice the Commitment added are removed from the map or
         // Available to out of play (Gov player's choice which cubes go)
-        val frenchCubesAvail = game.availablePieces.frenchCubes
-        val frenchCubesOnMap = game.totalOnMap(_.frenchCubes)
-        val frenchCubes      = frenchCubesAvail + frenchCubesOnMap
-        val maxNum = 2 min (frenchCubes / 2) min (EdgeTrackMax - game.commitment)
+        val frenchCubes   = game.availablePieces.frenchCubes + game.totalOnMap(_.frenchCubes)
+        val maxNum        = 2 min (frenchCubes / 2) min (EdgeTrackMax - game.commitment)
         val numCommitment = askInt("Add how much commitment", 0, maxNum)
-        val numCubes = numCommitment * 2
+        val numCubes      = numCommitment * 2
         if (numCommitment == 0) 
           log("No commitment added.")
         else {
           increaseCommitment(numCommitment)
           def removeCubes(remaining: Int): Unit = if (remaining > 0) {
-            println()
-            println(s"You must remove $remaining French cubes to out of play")
             val frenchCubesAvail = game.availablePieces.frenchCubes
             val frenchCubesOnMap = game.totalOnMap(_.frenchCubes)
+            println()
+            println(s"You must remove $remaining French cubes to out of play")
             val choice = {
               if (frenchCubesAvail == 0)      "map"
               else if (frenchCubesOnMap == 0) "avail"
@@ -184,7 +182,7 @@ object Cards {
             val numRemoved = if (choice == "avail") {
               val num = askInt("Remove how many total cubes from available", 0, game.availablePieces.frenchCubes min remaining)
               if (num > 0) {
-                val cubes = askPieces(game.availablePieces, num, List(FrenchPolice, FrenchTroops))
+                val cubes = askPieces(game.availablePieces, num, FRENCH_CUBES)
                 movePiecesFromAvailableToOutOfPlay(cubes)
               }
               num
@@ -194,7 +192,7 @@ object Cards {
               val sp = game.getSpace(name)
               val num = askInt(s"Remove how many total cubes from $name", 0, sp.frenchCubes min remaining)
               if (num > 0) {
-                val cubes = askPieces(sp.pieces, num, List(FrenchPolice, FrenchTroops))
+                val cubes = askPieces(sp.pieces, num, FRENCH_CUBES)
                 removeToOutOfPlay(name, cubes)
               }
               num
@@ -1034,7 +1032,7 @@ object Cards {
           log("There are no guerrillas in Tunisia")
         else {
           val num = sp.totalGuerrillas / 2
-          val guerrillas = askPieces(sp.pieces, sp.totalGuerrillas / 2, HiddenGuerrillas::ActiveGuerrillas::Nil)
+          val guerrillas = askPieces(sp.pieces, sp.totalGuerrillas / 2, GUERRILLAS)
           removeToAvailableFrom(Tunisia, guerrillas)
         }
       },
@@ -1231,7 +1229,7 @@ object Cards {
           log("There are no guerrillas in Tunisia")
         else {
           val num = sp.totalGuerrillas / 2
-          val guerrillas = askPieces(sp.pieces, sp.totalGuerrillas / 2, HiddenGuerrillas::ActiveGuerrillas::Nil)
+          val guerrillas = askPieces(sp.pieces, sp.totalGuerrillas / 2, GUERRILLAS)
           removeToOutOfPlay(Tunisia, guerrillas)
         }
       },

@@ -38,7 +38,6 @@ import ColonialTwilight._
 
 
 object Human {
-  val TROOPS = List(FrenchTroops, AlgerianTroops)
   
   case class Params(
     includeSpecialActivity: Boolean = false,
@@ -84,6 +83,16 @@ object Human {
     
     def toList = groups.toList.sortBy(_._1)
     def size = groups.size
+  }
+    
+  // If the Peace of the Brave: Amnesty momentum event is
+  // in effect, allow the user to remove a guerrilla from 
+  // the space.
+  def checkPeaceOfTheBrave(spaceName: String): Unit = {
+    val sp = game.getSpace(spaceName)
+    val prompt = s"\nDo you wish pay 1 resource to remove 1 guerrilla from $spaceName (y/n) "
+    if (momentumInPlay(MoPeaceOfTheBrave) && game.resources(Gov) > 0 && sp.totalGuerrillas > 0 && askYorN(prompt))
+      removeToAvailableFrom(spaceName, askPieces(sp.pieces, 1, GUERRILLAS))
   }
     
   sealed trait GovOp {
@@ -277,7 +286,7 @@ object Human {
             try {
               askCandidateAllowNone(s"\nChoose space with police cube: ", sourceCandidates.toList.sorted) foreach { source =>
                 val sp   = game.getSpace(source)
-                val p    = askPieces(sp.pieces - movingGroups(source), 1, FrenchPolice::AlgerianPolice::Nil)
+                val p    = askPieces(sp.pieces - movingGroups(source), 1, POLICE)
                 val dest = if (params.maxSpaces == Some(1) && movingGroups.size > 0)
                   movingGroups.toList.head._1
                 else
@@ -407,6 +416,7 @@ object Human {
           log()
           decreaseResources(Gov, 2)
         }
+        checkPeaceOfTheBrave(spaceName)
 
         def nextSource(): Unit = {
           val sources = sourceSpaces(game.getSpace(spaceName))
@@ -502,6 +512,7 @@ object Human {
               if (!params.free)
                 decreaseResources(Gov, costPerSpace)
               removeLosses(spaceName, flnLosses(game.getSpace(spaceName)))
+              checkPeaceOfTheBrave(spaceName)
               assaultSpaces += spaceName
             }
             nextChoice()
