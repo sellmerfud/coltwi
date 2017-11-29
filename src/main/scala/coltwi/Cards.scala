@@ -249,6 +249,9 @@ object Cards {
           case "wilaya" =>
             val withGuerrillas = (game.algerianSpaces filter (_.totalGuerrillas > 0) map (_.wilaya)).toSet
             val wilaya = askWilaya(allowed = withGuerrillas)
+            val numToRemove = 3 min (game.wilayaSpaces(wilaya) map (_.totalGuerrillas)).sum
+            println(s"\nRemove a total of $numToRemove guerrillas from spaces in Wilaya $wilaya")
+            
             def removeGuerrillas(remaining: Int): Unit = {
               val candidates = spaceNames(game.wilayaSpaces(wilaya) filter (_.totalGuerrillas > 0))
               if (remaining > 0  && candidates.nonEmpty) {
@@ -263,7 +266,7 @@ object Cards {
               }
             }
             
-            removeGuerrillas(3 min (game.wilayaSpaces(wilaya) map (_.totalGuerrillas)).sum)
+            removeGuerrillas(numToRemove)
           case _        =>
             log("The event has no effect")
         }
@@ -286,6 +289,38 @@ object Cards {
         // Psychological warfare: Choose 1 Wilaya and roll 1d6; 
         // if roll <= total guerrillas in wilaya, remove up to the number
         // rolled from that Wilaya to available.
+        val withGuerrillas = (game.algerianSpaces filter (_.totalGuerrillas > 0) map (_.wilaya)).toSet
+        if (withGuerrillas.isEmpty)
+          log("The event has no effect")
+        else {
+          val wilaya = askWilaya(allowed = withGuerrillas)
+          val numGs  = (game.wilayaSpaces(wilaya) map (_.totalGuerrillas)).sum
+          val die = dieRoll
+          log()
+          log(s"Number of guerrillas in Wilaya $wilaya: $numGs")
+          log(s"Die roll: $die")
+          if (die > numGs)
+            log("The event has no effect")
+          else {
+            println(s"\nRemove a total of $die guerrillas from spaces in Wilaya $wilaya")
+            
+            def removeGuerrillas(remaining: Int): Unit = {
+              val candidates = spaceNames(game.wilayaSpaces(wilaya) filter (_.totalGuerrillas > 0))
+              if (remaining > 0  && candidates.nonEmpty) {
+                val name = askCandidate(s"Select space in Wilaya $wilaya: ", candidates.sorted)
+                val sp = game.getSpace(name)
+                val num = askInt(s"Remove how many guerrillas from $name", 0, remaining min sp.totalGuerrillas)
+                if (num > 0) {
+                  val guerrillas = askPieces(sp.pieces, num, GUERRILLAS)
+                  removeToAvailableFrom(name, guerrillas)
+                }
+                removeGuerrillas(remaining - num)
+              }
+            }
+        
+            removeGuerrillas(die)
+          }
+        }
       },
       (role: Role) => {
         // Propaganda flop: Shift any 2 Sectors 1 level each towards Opposition. 
