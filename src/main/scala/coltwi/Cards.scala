@@ -1039,6 +1039,20 @@ object Cards {
       (role: Role) => {
         // Integrationist mandate: +1 Commitment or set 1 non-terrorized 
         // Neutral space to Support
+        val candidates = spaceNames(game.algerianSpaces filter (sp => sp.isNeutral && sp.terror == 0 && sp.population > 0))
+        val choice = if (game.commitment == EdgeTrackMax && candidates.isEmpty) "none"
+        else if (game.commitment == EdgeTrackMax) "space"
+        else if (candidates.isEmpty) "commit"
+        else {
+          println("\nChoose one:")
+          askMenu(List("commit" -> "Increase commitment by 1", 
+                       "space"  -> "Set non-terrorized Neutral space to Support")).head
+        }
+        choice match {
+          case "commit" => increaseCommitment(1)
+          case "space"  => setSupport(askCandidate("Select space: ", candidates.sorted), Support)
+          case _        => log("The event has no effect")
+        }
       },
       (role: Role) => {
         // Voter Supression: Set 1 sector to Neutral
