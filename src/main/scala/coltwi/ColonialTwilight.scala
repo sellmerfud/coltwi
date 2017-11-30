@@ -888,10 +888,13 @@ object ColonialTwilight {
       val desc = if (sp.isCity) "City"
                  else if (sp.isCountry) "Country, plains"
                  else s"Sector, ${sp.terrain}"
+      val popExtra = if (sp.isResettled) " (Resettled)"
+                     else if (sp.hasMarker(Plus1PopMarker)) " (+1 Population)"
+                     else ""
       b += ""
       b += s"${sp.nameAndZone}  ($desc)"
       b += separator()
-      b += s"Population: ${sp.population}${if(sp.isResettled) " (Resettled)" else ""}" 
+      b += s"Population: ${sp.population}$popExtra" 
       wrap("Status    : ", Seq(sp.control.toString, sp.support.toString)) foreach (l => b += l)
       wrap("Pieces    : ", sp.stringItems)  foreach (l => b += l)
       if (sp.markers.nonEmpty)
@@ -1025,7 +1028,7 @@ object ColonialTwilight {
     assert(sp.isCity, "addPlus1PopMarker: only applies to cities")
     if (game.plus1PopMarkersAvailable > 0) {
       game = game.updateSpace(sp.addMarker(Plus1PopMarker))
-      log(s"Add Base marker to $name")
+      log(s"Add '+1 Pop' marker to $name")
     }
     else
       log("There are no '+1 Pop' markers available")

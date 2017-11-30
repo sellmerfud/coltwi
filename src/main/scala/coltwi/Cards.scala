@@ -1276,7 +1276,18 @@ object Cards {
       (role: Role) => {
         // Flee to the cities: Play a '+1 Pop' marker in any 2 cities.
         // Ask which two cities
-        // addPlus1PopMarker(name)
+        def selectCities(num: Int, total: Int, candidates: List[String]): List[String] = {
+          if (num > total)
+            Nil
+          else {
+            val name = askCandidate(s"Select ${ordinal(num)} city: ", candidates.sorted)
+            name :: selectCities(num + 1, total, candidates filterNot (_ == name))
+          }
+        }
+        
+        selectCities(1, 2, spaceNames(game.spaces filter (_.isCity))) foreach { city =>
+          addPlus1PopMarker(city)
+        }
       },
       (role: Role) => {
         // Flee the country: The stacking limit for Bases in Morocco and
