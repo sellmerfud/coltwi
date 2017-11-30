@@ -937,6 +937,17 @@ object Cards {
         // Bonjour M. Bidasse: Move any number of French Police from 
         // Out of Play to Available.  Subtract Commitment = 1/3 of
         // total moved (round down)
+        if (game.outOfPlay.frenchPolice == 0) {
+          log("There are no French police in the out of play box")
+          log("The event has no effect")
+        }
+        else {
+          val canAfford = game.commitment * 3 + 2
+          val most = game.outOfPlay.frenchPolice min canAfford
+          val num = askInt("\nMove how many French police from Out of Play to Available", 1, most)
+          movePiecesFromOutOfPlayToAvailable(Pieces(frenchPolice = num))
+          decreaseCommitment(num / 3)
+        }
       },
       (role: Role) => ()
     )),
@@ -947,7 +958,21 @@ object Cards {
       // Remove any 1 Capability marker that is in effect.
       // That capability no longer applies.
       (role: Role) => if (role == Gov) {
-        // To be done
+        val caps = (game.capabilities filter (_.startsWith("Dual:"))) :::
+                   (game.capabilities filter (_.startsWith("FLN:")))  :::
+                   (game.capabilities filter (_.startsWith("Gov:")))
+        val index = caps.size match {
+          case 0 => -1
+          case 1 =>  0
+          case _ =>
+            val choices = caps.zipWithIndex map (_.swap)
+            println("\nRemove which capability from play:")
+            askMenu(choices).head
+        }
+        if (index == -1 )
+          log("There are no capabilities in play.  The event has no effect")
+        else
+          removeCapabilityFromPlay(caps(index))
       }
       else {
         val cap = shuffle(game.capabilities filter (_.startsWith("Gov:"))).head
