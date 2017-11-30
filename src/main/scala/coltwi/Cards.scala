@@ -703,11 +703,16 @@ object Cards {
         // Pressure on protectorates: Remove up to 1 base in each
         // of Morocco and Tunisia. (If independent). No increase in
         // Commitment.
-        if (game.moroccoTunisiaIndependent) {
-          // To be done
+        if (!game.moroccoTunisiaIndependent)
+          log("Morocco and Tunisia are not independent: The event has no effect")
+        else if (game.getSpace(Morocco).flnBases == 0 && game.getSpace(Tunisia).flnBases == 0)
+          log("No FLN bases in Morocco or Tunisia: The event has no effect")
+        else {
+          if (game.getSpace(Morocco).flnBases > 0)
+            removeToAvailableFrom(Morocco, Pieces(flnBases = 1))
+          if (game.getSpace(Tunisia).flnBases > 0)
+            removeToAvailableFrom(Tunisia, Pieces(flnBases = 1))
         }
-        else
-          log("Morocco and Tunisia are not independent: No effect")
       },
       (role: Role) => {
         // Arab Bloc solidarity: +6 FLN resources
@@ -721,7 +726,20 @@ object Cards {
       (role: Role) => {
         // Constantine Plan: Set up to 2 Government controlled spaces
         // to Support
-        
+        val canAffect = (sp: Space) => sp.isGovControlled && !sp.isSupport
+        if (game hasAlgerianSpace canAffect) {
+          def nextSpace(remaining: Int): Unit = {
+            val candiates = spaceNames(game.algerianSpaces filter canAffect)
+            if (remaining > 0 && candiates.nonEmpty) {
+              val name = askCandidate("Select space: ", candiates.sorted)
+              setSupport(name, Support)
+              nextSpace(remaining - 1)
+            }
+          }
+          nextSpace(2)
+        }
+        else
+          log("No Government controlled spaces not at Support. The event has no effect")
       },
       (role: Role) => {
         // Military funds diverted to social enterprises:
@@ -741,7 +759,28 @@ object Cards {
         val numPieces = (piecesDie + 1) / 2
         val resourcesDie = dieRoll
         if (role == Gov) {
-          // To be done.
+          def removeGuerrillas(remaining: Int): Unit = {
+            val candidates = spaceNames(game.spaces filter (_.totalGuerrillas > 0))
+            if (remaining > 0 && candidates.nonEmpty) {
+              val name   = askCandidate(s"\nSelect space to remove guerrillas: ", candidates.sorted)
+              val sp     = game.getSpace(name)
+              val most   = remaining min sp.totalGuerrillas
+              val num    = askInt(s"Remove how many guerrillas from $name", 0, most)
+              val pieces = askPieces(sp.pieces, num, GUERRILLAS)
+              removeToAvailableFrom(name, pieces)
+              removeGuerrillas(remaining - num)
+            }
+          }
+          
+          val guerrillasOnMap = game.totalOnMap(_.totalGuerrillas)
+          if (guerrillasOnMap == 0)
+            log("No guerrillas on the map to remove.")
+          else {
+            log(s"Die roll for guerrillas is $piecesDie.  $Gov may remove up to ${amountOf(numPieces, "guerrilla")}")
+            removeGuerrillas(numPieces min guerrillasOnMap)
+          }
+          log(s"Die roll for resources is $resourcesDie")
+          decreaseResources(Fln, resourcesDie)
         }
         else {
           var numRemoved = 0
@@ -753,7 +792,7 @@ object Cards {
             new Bot.CriteriaFilter[Space]("Gov control", _.isGovControlled),
             new Bot.HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas))
         
-          log(s"Die roll for pieces is $piecesDie.  $Fln may move up to $numPieces enemy pieces")
+          log(s"Die roll for pieces is $piecesDie.  $Fln may remove up to $numPieces enemy pieces")
           def doRemove(candiates: List[Space], pieceType: PieceType): Unit = {
             if (numRemoved < numPieces && candiates.nonEmpty) {
               val sp = if (candiates exists (_.flnBases > 0))
