@@ -130,7 +130,7 @@ object Cards {
       () => if (game hasAlgerianSpace leadershipSnatch) Shaded else NoEvent,
       (role: Role) => {
         // Gotcha: Activate all Guerrillas in 1 Wilaya
-        val wilaya = askWilaya()
+        val wilaya = askWilaya("\nSelect Wilaya to activate guerrillas: ")
         println()
         for (sp <- game.wilayaSpaces(wilaya))
           activateHiddenGuerrillas(sp.name, sp.hiddenGuerrillas)
@@ -406,6 +406,7 @@ object Cards {
       () => Shaded,
       (role: Role) => {
         // Braggadocio: Activate all Guerrillas in 1 Wilaya
+        deck(3).executeUnshaded(role)
       },
       (role: Role) => {
         // Sign me up: Until Propaganda Round, treat each Rally in a FLN-Con-trolled
@@ -514,8 +515,13 @@ object Cards {
     )),
     
     // ------------------------------------------------------------------------
+    // By the standard Bot rules, only the shaded event would be
+    // considered.  I have added considering the Unshaded event
+    // in the unlikey case that government commitment is at zero.
     entry(new Card(15, "Jean-Paul Sarte", Dual, false, false,
-      () => if (game.commitment > 0) Shaded else NoEvent
+      () => if (game.commitment > 0) Shaded 
+            else if (game.resources(Fln) < EdgeTrackMax) Unshaded 
+            else NoEvent
       ,
       (role: Role) => {
         // Writes a play, donates royalties: +2 FLN Resources
@@ -533,7 +539,25 @@ object Cards {
       (role: Role) => {
         // Force de Frappe releases conventional troops: 
         // Move 1d6 French cubes from Out of Play to Available.
+        if (game.outOfPlay.frenchCubes == 0)
+          log("No French cubes are out of play. The event has no effect")
+        else {
+          val die = dieRoll
+          log(s"Die roll is: $die")
+          val cubes = if (game.outOfPlay.frenchCubes <= die)
+            game.outOfPlay.only(FRENCH_CUBES)
+          else if (game.outOfPlay.frenchTroops == 0)
+            Pieces(frenchPolice = die)
+          else if (game.outOfPlay.frenchPolice == 0)
+            Pieces(frenchTroops = die)
+          else 
+            askPieces(game.outOfPlay, die, FRENCH_CUBES, Some("Move cubes from Out of Play to Available"))
+          
+          movePiecesFromOutOfPlayToAvailable(cubes)
+        }
       },
+      // Continental war scare: Move 1d6 French cubes from available or
+      // the map to Out of Play (Government player's choice)
       (role: Role) => ()
     )),
     

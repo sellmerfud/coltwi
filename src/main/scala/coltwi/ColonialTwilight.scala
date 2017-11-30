@@ -928,13 +928,13 @@ object ColonialTwilight {
   def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.activateGuerrillas(num))
-    log(s"Flip ${hiddenG(num)} in $spaceName to active")
+    log(s"Flip ${hiddenG(num)} to active in $spaceName")
   }
   
   def hideActiveGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.hideGuerrillas(num))
-    log(s"Flip ${activeG(num)} in $spaceName to underground")
+    log(s"Flip ${activeG(num)} to underground in $spaceName")
   }
 
   def increaseResources(role: Role, amount: Int): Unit = if (amount > 0) {
@@ -2526,21 +2526,20 @@ object ColonialTwilight {
     
     @tailrec def getNextResponse(): Unit = {
       println()
-      println("Casualties box")
+      println("Out of Play box")
       println(separator())
-      println(game.casualties)
+      println(game.outOfPlay)
       println()
       println("Available")
       println(separator())
       println(game.availablePieces)
       println()
 
-      val choices = List(
-        "french troops", "french police", "guerrillas", "government bases")
+      val choices = List("french troops", "french police", "guerrillas", "government bases")
       askOneOf(s"[Adjust out of play] (? for list): ", choices, allowNone = true, allowAbort = false) match {
         case None =>
-        case Some(casualty) =>
-          casualty match {
+        case Some(piece) =>
+          piece match {
             case "french troops"    => adjustPiece(FrenchTroops)
             case "french police"    => adjustPiece(FrenchPolice)
             case "guerrillas"       => adjustPiece(HiddenGuerrillas)
