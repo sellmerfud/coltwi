@@ -1393,9 +1393,26 @@ object ColonialTwilight {
           }
           else {
             val num = askInt(s"\nHow many $pieceType? ", 0, maxOfType)
-            if (num > game.availablePieces.numOf(pieceType))
-              voluntaryRemoval(num - game.availablePieces.numOf(pieceType), pieceType, Set(spaceName))
-            nextType(placed.add(num, pieceType), remainingTypes.tail)
+            val numAvail = game.availablePieces.numOf(pieceType)
+            val finalNum = if (num <= numAvail)
+               num
+            else {
+              // Ask if they want to voluntarilty remove pieces to make up the difference.
+              numAvail match {
+                case 0 => println(s"\nThere are no ${pieceType.plural} in the available box")
+                case 1 => println(s"\nThere is only 1 ${pieceType.singular} in the available box")
+                case n => println(s"\nThere are only ${amtPiece(n, pieceType)} in the available box")
+              }
+              println
+              if (askYorN("Do you wish to voluntarily remove pieces to make up the difference? (y/n) ")) {
+                val numToRemove = askInt("How many pieces do you wish to remove from the map", 0, num - numAvail)
+                voluntaryRemoval(numToRemove, pieceType, Set(spaceName))
+                numAvail + numToRemove
+              }
+              else
+                numAvail
+            }
+            nextType(placed.add(finalNum, pieceType), remainingTypes.tail)
           }
         }
       }
@@ -1405,7 +1422,7 @@ object ColonialTwilight {
   }
 
   // Ask the user to remove the given number of pieces of the requested type from the map.
-  def voluntaryRemoval(num: Int, pieceType: PieceType, prohibitedSpaces: Set[String]): Unit = {
+  def voluntaryRemoval(num: Int, pieceType: PieceType, prohibitedSpaces: Set[String]): Unit = if (num > 0) {
     val candidateNames = spaceNames(game.spaces filterNot (sp => prohibitedSpaces(sp.name)) filter (_.numOf(pieceType) > 0))
     def availPieces(names: List[String]) = names.foldLeft(0)((sum, n) => sum + game.getSpace(n).numOf(pieceType))
     assert(availPieces(candidateNames) >= num, "voluntaryRemoval: Not enough pieces on map!")
