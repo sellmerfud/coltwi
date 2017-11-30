@@ -1304,7 +1304,7 @@ object ColonialTwilight {
   // Ask the user to select a number of pieces. 
   // The type of pieces allowed for selection may be limited by passing a list of those
   // that are allowed.  An empty list indicates that all types of pieces may be selected.
-  def askPieces(pieces: Pieces, num: Int, allowed: List[PieceType] = AllPieceTypes,
+  def askPieces(pieces: Pieces, num: Int, allowed: Seq[PieceType] = AllPieceTypes,
       heading: Option[String] = None,
       allowAbort: Boolean = true): Pieces = {
     val pieceTypes = allowed filter (pieces.numOf(_) > 0)
@@ -1321,7 +1321,7 @@ object ColonialTwilight {
         wrap("  ", available.stringItems) foreach println
         println()
       
-        def nextType(types: List[PieceType]): Unit = {
+        def nextType(types: Seq[PieceType]): Unit = {
           val numRemaining = numPieces - selected.total
           if (numRemaining != 0) {
             // If we have to include all remainig pieces, don't bother asking

@@ -595,6 +595,20 @@ object Cards {
       (role: Role) => {
         // Heads broken: Set 1 selected City to Neutral. 
         // Add commitment = population of city
+        val candidates = spaceNames(game.algerianSpaces filter (sp => sp.isCity && !sp.isNeutral))
+        val name = if (candidates.isEmpty) ""
+        else if (candidates.size == 1)
+          candidates.head
+        else
+          askCandidate("Select a city: ", candidates.sorted)
+
+        if (name == "")
+          log("All cities are already Neutral.  The event has no effect")
+        else {
+          val sp = game.getSpace(name)
+          setSupport(sp.name, Neutral)
+          increaseCommitment(sp.population)
+        }
       },
       (role: Role) => {
         // United Nations resolution condemning violence
@@ -609,9 +623,49 @@ object Cards {
     entry(new Card(20, "Suave qui peut", Single, FlnMarked, false,
       () => NoEvent,  // Bot never plays this event
       (role: Role) => {
-        // Defections and desertions: Executor of Event may remove up to 3
+        // Defections and desertions: Executor of Event may removes up to 3
         // Guerrillas or Algerian Police to available, pay 1 resource each.
-        
+        if (game.resources(Gov) == 0)
+          log(s"$Gov has no resources.  The event has no effect")
+        else {
+          val totalGuerrillas = game.totalOnMap(_.totalGuerrillas)
+          val totalPolice     = game.totalOnMap(_.algerianPolice)
+          val choice = if (totalGuerrillas + totalPolice == 0)
+            "none"
+          else if (totalGuerrillas == 0)
+            "police"
+          else if (totalPolice == 0)
+            "guerrillas"
+          else {
+            println("\nChoose one:")
+            askMenu(List("guerrillas" -> "Remove Guerrillas", "police" -> "Remove Algerian police")).head
+          }
+
+          def removePieces(remaining: Int, types: Seq[PieceType], desc: String): Unit = {
+            val candidates = spaceNames(game.spaces filter (_.totalOf(types) > 0))
+            if (remaining > 0 && candidates.nonEmpty) {
+              val name   = askCandidate(s"\nSelect space to remove $desc: ", candidates.sorted)
+              val sp     = game.getSpace(name)
+              val most   = remaining min sp.totalOf(types)
+              val num    = askInt(s"Remove how many $desc from $name", 0, most)
+              val pieces = askPieces(sp.pieces, num, types)
+              removeToAvailableFrom(name, pieces)
+              removePieces(remaining - num, types, desc)
+            }
+          }
+          
+          choice match {
+            case "guerrillas" =>
+              val num = askInt("Remove how many total guerrillas", 1, 3 min game.resources(Gov))
+              decreaseResources(Gov, num)
+              removePieces(num, GUERRILLAS, "guerrillas")
+            case "police" =>
+              val num = askInt("Remove how many total Algerian police", 1, 3 min game.resources(Gov))
+              decreaseResources(Gov, num)
+              removePieces(num, Seq(AlgerianPolice), "Algerian police")
+            case _ => log("There are no guerrillas or Algerian police on the map.  The event has no effect")
+          }
+        }
       },
       (role: Role) => () // Single event
     )),
