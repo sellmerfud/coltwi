@@ -1087,6 +1087,18 @@ object Cards {
       (role: Role) => {
         // Crippling leadership loss: Remove 1 Guerrilla from
         // any space to casualties, -1d6 FLN resources
+        if (game.totalOnMap(_.totalGuerrillas) == 0 && game.resources(Fln) == 0)
+          log("The event has no effect")
+        else {
+          val candidates = spaceNames(game.spaces filter (_.totalGuerrillas > 0))
+          if (candidates.nonEmpty) {
+            val name      = askCandidate("Select space to remove guerrilla: ", candidates.sorted)
+            val sp        = game.getSpace(name)
+            val guerrilla = askPieces(sp.pieces, 1, GUERRILLAS)
+            removeToCasualties(name, guerrilla)
+          }
+          decreaseResources(Fln, dieRoll)
+        }
         
       },
       (role: Role) => {
@@ -1112,6 +1124,7 @@ object Cards {
       () => NoEvent,  // Bot will never use this event
       (role: Role) => {
         // Expansion: Free Train in up to 2 selectable spaces.
+        Human.Train.execute(Human.Params(free = true, maxSpaces = Some(2)))
       },
       (role: Role) => ()
     )),
@@ -1136,6 +1149,17 @@ object Cards {
       (role: Role) => {
         // Harsh terrain: Select 2 Mountain spaces with no FLN Base.
         // Remove all guerrillas there to available.
+        def nextSpace(remaining: Int, candidates: List[String]): Unit = if (remaining > 0 && candidates.nonEmpty) {
+          val name = askCandidate("\nSelect mountain space with guerrillas and no FLN base: ", candidates.sorted)
+          removeToAvailableFrom(name, game.getSpace(name).only(GUERRILLAS))
+          nextSpace(remaining - 1, candidates filterNot (_ == name))
+        }
+
+        val candidates = spaceNames(game.algerianSpaces filter (sp => sp.isMountains && sp.totalGuerrillas > 0 && sp.flnBases == 0))
+        if (candidates.isEmpty)
+          log("No mountain spaces qualify.  The event has no effect")
+        else
+          nextSpace(2, candidates)
       },
       (role: Role) => ()
     )),

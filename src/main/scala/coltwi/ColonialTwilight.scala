@@ -882,13 +882,17 @@ object ColonialTwilight {
     def spaceSummary(name: String): Seq[String] = {
       val sp = game.getSpace(name)
       val b = new ListBuffer[String]
+      val desc = if (sp.isCity) "City"
+                 else if (sp.isCountry) "Country, plains"
+                 else s"Sector, ${sp.terrain}"
       b += ""
-      b += s"${sp.nameAndZone}  (Pop ${sp.population})"
+      b += s"${sp.nameAndZone}  ($desc)"
       b += separator()
-      wrap("Status : ", Seq(sp.control.toString, sp.support.toString)) foreach (l => b += l)
-      wrap("Pieces : ", sp.stringItems)  foreach (l => b += l)
+      b += s"Population: ${sp.population}${if(sp.isResettled) " (Resettled)" else ""}" 
+      wrap("Status    : ", Seq(sp.control.toString, sp.support.toString)) foreach (l => b += l)
+      wrap("Pieces    : ", sp.stringItems)  foreach (l => b += l)
       if (sp.markers.nonEmpty)
-        wrap("Markers: ", sp.markers.sorted)  foreach (l => b += l)
+        wrap("Markers   : ", sp.markers.sorted)  foreach (l => b += l)
       b.toList
     }
   }
