@@ -251,11 +251,11 @@ object Human {
   object Garrison extends GovOp {
     override def toString() = "Garrison"
     val destFilter     = (sp: Space) => { sp.isResettled || sp.population > 0 }
-    val sourceFilter   = (sp: Space) => { destFilter(sp) && movablePolice(sp) > 0 }
-    def movablePolice(sp: Space) = sp.totalPolice - movingGroups(sp.name).totalPolice
+    val sourceFilter   = (sp: Space) => { destFilter(sp) && movablePolice(sp).total > 0 }
+    def movablePolice(sp: Space) = sp.pieces.only(POLICE) - movingGroups(sp.name)
+    def totalMoved = movingGroups.toList.foldLeft(0) { case (sum, (_, p)) => sum + p.totalPolice }
     
     override def execute(params: Params): Int = {
-      def totalMoved = movingGroups.toList.foldLeft(0) { case (sum, (_, p)) => sum + p.totalPolice }
       // Return the number of police cubes in the space that have not already been moved
       val destCandidates = validSpaces(params)(destFilter)
       log()
@@ -268,32 +268,45 @@ object Human {
       def nextChoice(): Unit = {
         val sourceCandidates = validSpaces(params)(sourceFilter)
         val choices = List(
-          choice(totalMoved < 6 && sourceCandidates.nonEmpty, "police",   s"Select a police cube to move"),
+          choice(totalMoved < 6 && sourceCandidates.nonEmpty, "police",   s"Select a police cubes to move"),
           choice(specialActivity.allowed,                     "special",  s"Perform a special activity"),
           choice(true,                                        "done",     s"Finished selecting police cubes"),
           choice(true,                                        "abort",    s"Abort the entire $Gov turn")
         ).flatten
       
+    
+        val avail = sourceCandidates.toList.sorted map { name => 
+          val movers = game.getSpace(name).pieces.only(POLICE) - movingGroups(name)
+          s"${name} ($movers)"
+        }
+        val moved = movingGroups.toList.sortBy(_._1) map { case (n, p) => s"$n ($p)"}
+      
         println("\n")
-        println(s"$Gov Garrison operation")
-        println(separator(char = '='))
-        val moved = movingGroups.toList map { case (n, p) => s"$n (${p.toString})"}
-        wrap("police moved: ", moved) foreach println
-        println(s"\nChoose one:")
+        println("Police available to move:")
+        println(separator())
+        wrap("  ", avail) foreach println
+      
+        println("\n")
+        println("Police already to moved:")
+        println(separator())
+        wrap("  ", moved) foreach println
+      
+        println("\nChoose one:")
         askMenu(choices, allowAbort = false).head match {
           case "police" =>
             val savedState = game
             try {
-              askCandidateAllowNone(s"\nChoose space with police cube: ", sourceCandidates.toList.sorted) foreach { source =>
-                val sp   = game.getSpace(source)
-                val p    = askPieces(sp.pieces - movingGroups(source), 1, POLICE)
-                val dest = if (params.maxSpaces == Some(1) && movingGroups.size > 0)
-                  movingGroups.toList.head._1
-                else
-                  askCandidate(s"Choose destination space: ", destCandidates.toList.sorted)
-                movePieces(p, source, dest)
-                movingGroups.add(dest, p)
-              }
+              val source = askCandidate(s"\nSelect source space: ", sourceCandidates.toList.sorted)
+              val dest = if (params.maxSpaces == Some(1) && movingGroups.size > 0)
+                movingGroups.toList.head._1
+              else
+                askCandidate(s"Select destination space: ", (destCandidates - source).toList.sorted)
+              val sp   = game.getSpace(source)
+              val most = (6 - totalMoved) min movablePolice(sp).total
+              val num  = askInt(s"Move how many police from $source to $dest", 0, most)
+              val p    = askPieces(movablePolice(sp), num, POLICE)
+              movePieces(p, source, dest)
+              movingGroups.add(dest, p)
             }
             catch {
               case AbortAction =>
@@ -313,7 +326,10 @@ object Human {
             nextChoice()
           
           case "done" =>
-            activateGuerrillas(params)
+            if (params.maxSpaces == Some(1))
+              activateGuerrillas(params, Some(movingGroups.toList.head._1))
+            else
+              activateGuerrillas(params, None)
         }
       }
     
@@ -323,7 +339,7 @@ object Human {
     
     // Activate guerrillas. Can be any space with hidden guerrillas where
     // there are enough police cubes.  
-    def activateGuerrillas(params: Params): Unit = {
+    def activateGuerrillas(params: Params, limOpSpace: Option[String]): Unit = {
       def guerrillasActivated(sp: Space) = if (sp.isMountains)
         if (capabilityInPlay(CapGovCommandos))
           (sp.algerianPolice + (sp.frenchPolice / 2)) min sp.hiddenGuerrillas
@@ -331,7 +347,12 @@ object Human {
           (sp.totalPolice / 2) min sp.hiddenGuerrillas
       else
         sp.totalPolice min sp.hiddenGuerrillas
-      val candidates = spaceNames(game.algerianSpaces filter (guerrillasActivated(_) > 0))
+      
+      val candidates = limOpSpace match {
+        case Some(_) => spaceNames(limOpSpace.toList map game.getSpace filter (guerrillasActivated(_) > 0))
+        case None    => spaceNames(game.algerianSpaces filter (guerrillasActivated(_) > 0))
+      }
+        
       if (candidates.isEmpty)
         println(s"\nThere are no spaces where hidden guerrillas can be activated by police cubes")
       else {

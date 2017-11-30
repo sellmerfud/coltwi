@@ -282,11 +282,14 @@ object ColonialTwilight {
   val AllPieceTypes = List(FrenchTroops, FrenchPolice, AlgerianTroops, AlgerianPolice,
                       HiddenGuerrillas, ActiveGuerrillas, GovBases, FlnBases)
   
-  val FLNPieces = Set[PieceType](HiddenGuerrillas, ActiveGuerrillas, FlnBases)
-  val TROOPS       = List(FrenchTroops, AlgerianTroops)
-  val POLICE       = List(FrenchPolice, AlgerianPolice)
-  val FRENCH_CUBES = List(FrenchPolice, FrenchTroops)
-  val GUERRILLAS   = List(HiddenGuerrillas, ActiveGuerrillas)
+  val FLNPieces      = Set[PieceType](HiddenGuerrillas, ActiveGuerrillas, FlnBases)
+  
+  val TROOPS         = List(FrenchTroops, AlgerianTroops)
+  val POLICE         = List(FrenchPolice, AlgerianPolice)
+  val FRENCH_CUBES   = List(FrenchPolice, FrenchTroops)
+  val ALGERIAN_CUBES = List(AlgerianPolice, AlgerianTroops)
+  val CUBES          = FRENCH_CUBES ::: ALGERIAN_CUBES
+  val GUERRILLAS     = List(HiddenGuerrillas, ActiveGuerrillas)
   
   
   def owner(t: PieceType) = if (FLNPieces contains t) Fln else Gov

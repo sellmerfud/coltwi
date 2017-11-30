@@ -1170,6 +1170,75 @@ object Cards {
       (role: Role) => {
         // Sea Lift: May redistribute up to 6 cubes among
         // any 3 coastal spaces for free.
+        def movableCubes(sp: Space) = sp.pieces.only(CUBES) - Human.movingGroups(sp.name)
+        def totalMoved = Human.movingGroups.toList.foldLeft(0) { case (sum, (_, p)) => sum + p.totalCubes }
+        
+        def selectSpaces(num: Int, total: Int, candidates: List[String]): List[String] = {
+          if (num > total)
+            Nil
+          else {
+            val name = askCandidate(s"Select ${ordinal(num)} coastal space: ", candidates.sorted)
+            name :: selectSpaces(num + 1, total, candidates filterNot (_ == name))
+          }
+        }
+        
+        def nextChoice(selectedNames: List[String]): Unit = {
+          val selectedSpaces = spaces(selectedNames)
+          val sourceCandidates = selectedSpaces filter (movableCubes(_).total > 0)
+          val choices = List(
+            choice(totalMoved < 6 && sourceCandidates.nonEmpty, "cube",  s"Select a cubes to move"),
+            choice(true,                                        "done",  s"Finished moving cubes"),
+            choice(true,                                        "abort", s"Abort the entire $Gov turn")
+          ).flatten
+      
+          val avail = sourceCandidates.sortBy(_.name) map { sp => 
+            s"${sp.name} (${sp.pieces.only(CUBES) - Human.movingGroups(sp.name)})"
+          }
+          val moved = Human.movingGroups.toList.sortBy(_._1) map { case (n, p) => s"$n ($p)"}
+          println("\n")
+          println("Cubes available to move:")
+          println(separator())
+          wrap("  ", avail) foreach println
+          
+          println("\n")
+          println("Cubes already to moved:")
+          println(separator())
+          wrap("  ", moved) foreach println
+          
+          println("\nChoose one:")
+          askMenu(choices, allowAbort = false).head match {
+            case "cube" =>
+              val savedState = game
+              try {
+                val source = askCandidate(s"\nSelect source space: ", spaceNames(sourceCandidates).sorted)
+                val dest   = askCandidate(s"Select destination space: ", (selectedNames filterNot (_ == source)).sorted)
+                val sp     = game.getSpace(source)
+                val most   = (6 - totalMoved) min movableCubes(sp).total
+                val num    = askInt(s"Move how many cubes from $source to $dest", 0, most)
+                val p      = askPieces(movableCubes(sp), num, CUBES)
+                movePieces(p, source, dest)
+                Human.movingGroups.add(dest, p)
+              }
+              catch {
+                case AbortAction =>
+                  println(s"\n>>>> Aborting cube movement <<<<")
+                  println(separator())
+                  displayGameStateDifferences(game, savedState)
+                  game = savedState
+              }
+              nextChoice(selectedNames)
+          
+            case "abort" =>
+              if (askYorN("Really abort? (y/n) ")) throw AbortAction
+              nextChoice(selectedNames)
+          
+            case "done" =>
+          }
+        }
+            
+        val numSpaces = askInt("How many coastal spaces do you wish to select", 2, 3)
+        val selectedNames = selectSpaces(1, numSpaces, spaceNames(game.algerianSpaces filter (_.coastal)))
+        nextChoice(selectedNames)
       },
       (role: Role) => ()
     )),
