@@ -826,7 +826,15 @@ object Cards {
         // Ratonade: Remove up to all FLN pieces in Algiers to Available.
         // +1 Commitment per base removed.  +1 FLN resource for each piece
         // removed.
-        
+        val sp = game.getSpace(Algiers)
+        if (sp.totalFln == 0)
+          log("There are no FLN pieces in Algiers.  The event has no effect")
+        else {
+          val flnPieces = sp.only(Seq(HiddenGuerrillas, ActiveGuerrillas, FlnBases))
+          removeToAvailableFrom(Algiers, flnPieces)
+          increaseCommitment(sp.flnBases)
+          increaseResources(Fln, sp.totalFln)
+        }
       },
       (role: Role) => {
         // Urban uprising: Place up to 4 Guerrillas in Algiers.  If this makes
@@ -875,7 +883,23 @@ object Cards {
       // Set these spaces to Neutral, -1 Commitment for each terror marker
       // placed (no matter who executed the event)
       (role: Role) => if (role == Gov) {
-        // To do
+        if (game.resources(Gov) == 0)
+          log(s"$Gov has no resources.  The event has no effect")
+        else if (game.terrorMarkersAvailable == 0)
+          log(s"There are no available terror markers.  The event has no effect")
+        else {
+          def nextMarker(remaining: Int): Unit = if (remaining > 0) {
+            val name = askCandidate("\nSelect space for terror marker: ", spaceNames(game.algerianSpaces).sorted)
+            decreaseResources(Gov, 1)
+            addTerror(name, 1)
+            setSupport(name, Neutral)
+            decreaseCommitment(1)
+            nextMarker(remaining - 1)
+          }
+          val num = if ((game.terrorMarkersAvailable min game.resources(Gov)) == 1) 1
+          else askInt("Place how many terror markers", 1, 2)
+          nextMarker(num)
+        }
       }
       else { // role == Fln
         val priorities = List(
