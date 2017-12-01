@@ -83,6 +83,15 @@ object Cards {
     new Bot.CriteriaFilter[Space]("Is at support", _.isSupport),
     new Bot.HighestScorePriority[Space]("Highest population", _.population),
     new Bot.CriteriaFilter[Space]("Gov cannot train", sp => !sp.canTrain))
+    
+  def spaceCandidates(criteria: Space => Boolean): List[String] = 
+    spaceNames(game.spaces filter criteria).sorted
+    
+  def algerianCandidates(criteria: Space => Boolean): List[String] = 
+    spaceNames(game.algerianSpaces filter criteria).sorted
+  
+  def wilayaCandidates(wilaya: String)(criteria: Space => Boolean): List[String] =
+    spaceNames(game.wilayaSpaces(wilaya) filter criteria).sorted
   
   val deckMap: Map[Int, Card] = Map(
     // ------------------------------------------------------------------------
@@ -99,7 +108,7 @@ object Cards {
             println(s"\nFrench police in the available box: ${game.frenchPoliceAvailable}")
             askMenu(choices).head match {
               case "space" =>
-                val name = askCandidate("Which space: ", candidates.sorted)
+                val name = askCandidate("Which space: ", candidates)
                 val num  = askInt("How many French Police", 0, game.frenchPoliceAvailable)
                 placePieces(name, Pieces(frenchPolice = num))
                 nextSpace(remaining - 1, candidates filterNot (_ == name))
@@ -108,7 +117,7 @@ object Cards {
           }
         }
         if (game.frenchPoliceAvailable > 0)
-          nextSpace(3, spaceNames(game.algerianSpaces))
+          nextSpace(3, spaceNames(game.algerianSpaces).sorted)
         else
           log("There are no French Police in the available box")
       },
@@ -188,7 +197,7 @@ object Cards {
               num
             }
             else {
-              val name = askCandidate("Select space to remove french cubes: ", spaceNames(game.spaces filter (_.frenchCubes > 0)))
+              val name = askCandidate("Select space to remove french cubes: ", spaceCandidates(_.frenchCubes > 0))
               val sp = game.getSpace(name)
               val num = askInt(s"Remove how many total cubes from $name", 0, sp.frenchCubes min remaining)
               if (num > 0) {
@@ -253,9 +262,9 @@ object Cards {
             println(s"\nRemove a total of $numToRemove guerrillas from spaces in Wilaya $wilaya")
             
             def removeGuerrillas(remaining: Int): Unit = {
-              val candidates = spaceNames(game.wilayaSpaces(wilaya) filter (_.totalGuerrillas > 0))
+              val candidates = wilayaCandidates(wilaya)(_.totalGuerrillas > 0)
               if (remaining > 0  && candidates.nonEmpty) {
-                val name = askCandidate(s"Select space in Wilaya $wilaya: ", candidates.sorted)
+                val name = askCandidate(s"Select space in Wilaya $wilaya: ", candidates)
                 val sp = game.getSpace(name)
                 val num = askInt(s"Remove how many guerrillas from $name", 0, remaining min sp.totalGuerrillas)
                 if (num > 0) {
@@ -277,7 +286,7 @@ object Cards {
           specialActivityAllowed = false,
           freeOperation          = true,
           maxSpaces              = Some(1),
-          onlyIn                 = spaceNames(game.spaces filter (_.flnBases > 0)).toSet)
+          onlyIn                 = spaceCandidates(_.flnBases > 0).toSet)
         Bot.ConsiderRally.execute() // Rally will only be used if it adds a base and/or shifts the France Track
       }
     )),
@@ -305,9 +314,9 @@ object Cards {
             println(s"\nRemove a total of $die guerrillas from spaces in Wilaya $wilaya")
             
             def removeGuerrillas(remaining: Int): Unit = {
-              val candidates = spaceNames(game.wilayaSpaces(wilaya) filter (_.totalGuerrillas > 0))
+              val candidates = wilayaCandidates(wilaya)(_.totalGuerrillas > 0)
               if (remaining > 0  && candidates.nonEmpty) {
-                val name = askCandidate(s"Select space in Wilaya $wilaya: ", candidates.sorted)
+                val name = askCandidate(s"Select space in Wilaya $wilaya: ", candidates)
                 val sp = game.getSpace(name)
                 val num = askInt(s"Remove how many guerrillas from $name", 0, remaining min sp.totalGuerrillas)
                 if (num > 0) {
@@ -375,13 +384,13 @@ object Cards {
           def affectNeutral(candidates: List[String], remaining: Int): Unit = {
             if (remaining > 0 && candidates.nonEmpty) {
               println()
-              val name = askCandidate("Select a non-terrorized neutral space: ", candidates.sorted)
+              val name = askCandidate("Select a non-terrorized neutral space: ", candidates)
               val choices  = List("support" -> s"Set $name to Support", "oppose" -> s"Set $name to Opposition")
               setSupport(name, if (askMenu(choices).head == "support") Support else Oppose)
               affectNeutral(candidates filterNot (_ == name), remaining - 1)
             }
           }
-          val candidates = spaceNames(game.algerianSpaces filter beniOuiOui)
+          val candidates = algerianCandidates(beniOuiOui)
           if (candidates.isEmpty)
             log("No non-terrorized neutral spaces. The event has no effect")
           else
@@ -595,12 +604,12 @@ object Cards {
       (role: Role) => {
         // Heads broken: Set 1 selected City to Neutral. 
         // Add commitment = population of city
-        val candidates = spaceNames(game.algerianSpaces filter (sp => sp.isCity && !sp.isNeutral))
+        val candidates = algerianCandidates(sp => sp.isCity && !sp.isNeutral)
         val name = if (candidates.isEmpty) ""
         else if (candidates.size == 1)
           candidates.head
         else
-          askCandidate("Select a city: ", candidates.sorted)
+          askCandidate("Select a city: ", candidates)
 
         if (name == "")
           log("All cities are already Neutral.  The event has no effect")
@@ -642,9 +651,9 @@ object Cards {
           }
 
           def removePieces(remaining: Int, types: Seq[PieceType], desc: String): Unit = {
-            val candidates = spaceNames(game.spaces filter (_.totalOf(types) > 0))
+            val candidates = spaceCandidates(_.totalOf(types) > 0)
             if (remaining > 0 && candidates.nonEmpty) {
-              val name   = askCandidate(s"\nSelect space to remove $desc: ", candidates.sorted)
+              val name   = askCandidate(s"\nSelect space to remove $desc: ", candidates)
               val sp     = game.getSpace(name)
               val most   = remaining min sp.totalOf(types)
               val num    = askInt(s"Remove how many $desc from $name", 0, most)
@@ -729,9 +738,9 @@ object Cards {
         val canAffect = (sp: Space) => sp.isGovControlled && !sp.isSupport
         if (game hasAlgerianSpace canAffect) {
           def nextSpace(remaining: Int): Unit = {
-            val candiates = spaceNames(game.algerianSpaces filter canAffect)
+            val candiates = algerianCandidates(canAffect)
             if (remaining > 0 && candiates.nonEmpty) {
-              val name = askCandidate("Select space: ", candiates.sorted)
+              val name = askCandidate("Select space: ", candiates)
               setSupport(name, Support)
               nextSpace(remaining - 1)
             }
@@ -760,9 +769,9 @@ object Cards {
         val resourcesDie = dieRoll
         if (role == Gov) {
           def removeGuerrillas(remaining: Int): Unit = {
-            val candidates = spaceNames(game.spaces filter (_.totalGuerrillas > 0))
+            val candidates = spaceCandidates(_.totalGuerrillas > 0)
             if (remaining > 0 && candidates.nonEmpty) {
-              val name   = askCandidate(s"\nSelect space to remove guerrillas: ", candidates.sorted)
+              val name   = askCandidate(s"\nSelect space to remove guerrillas: ", candidates)
               val sp     = game.getSpace(name)
               val most   = remaining min sp.totalGuerrillas
               val num    = askInt(s"Remove how many guerrillas from $name", 0, most)
@@ -1039,7 +1048,7 @@ object Cards {
       (role: Role) => {
         // Integrationist mandate: +1 Commitment or set 1 non-terrorized 
         // Neutral space to Support
-        val candidates = spaceNames(game.algerianSpaces filter (sp => sp.isNeutral && sp.terror == 0 && sp.population > 0))
+        val candidates = algerianCandidates(sp => sp.isNeutral && sp.terror == 0 && sp.population > 0)
         val choice = if (game.commitment == EdgeTrackMax && candidates.isEmpty) "none"
         else if (game.commitment == EdgeTrackMax) "space"
         else if (candidates.isEmpty) "commit"
@@ -1050,7 +1059,7 @@ object Cards {
         }
         choice match {
           case "commit" => increaseCommitment(1)
-          case "space"  => setSupport(askCandidate("Select space: ", candidates.sorted), Support)
+          case "space"  => setSupport(askCandidate("Select space: ", candidates), Support)
           case _        => log("The event has no effect")
         }
       },
@@ -1090,9 +1099,9 @@ object Cards {
         if (game.totalOnMap(_.totalGuerrillas) == 0 && game.resources(Fln) == 0)
           log("The event has no effect")
         else {
-          val candidates = spaceNames(game.spaces filter (_.totalGuerrillas > 0))
+          val candidates = spaceCandidates(_.totalGuerrillas > 0)
           if (candidates.nonEmpty) {
-            val name      = askCandidate("Select space to remove guerrilla: ", candidates.sorted)
+            val name      = askCandidate("Select space to remove guerrilla: ", candidates)
             val sp        = game.getSpace(name)
             val guerrilla = askPieces(sp.pieces, 1, GUERRILLAS)
             removeToCasualties(name, guerrilla)
@@ -1150,12 +1159,12 @@ object Cards {
         // Harsh terrain: Select 2 Mountain spaces with no FLN Base.
         // Remove all guerrillas there to available.
         def nextSpace(remaining: Int, candidates: List[String]): Unit = if (remaining > 0 && candidates.nonEmpty) {
-          val name = askCandidate("\nSelect mountain space with guerrillas and no FLN base: ", candidates.sorted)
+          val name = askCandidate("\nSelect mountain space with guerrillas and no FLN base: ", candidates)
           removeToAvailableFrom(name, game.getSpace(name).only(GUERRILLAS))
           nextSpace(remaining - 1, candidates filterNot (_ == name))
         }
 
-        val candidates = spaceNames(game.algerianSpaces filter (sp => sp.isMountains && sp.totalGuerrillas > 0 && sp.flnBases == 0))
+        val candidates = algerianCandidates(sp => sp.isMountains && sp.totalGuerrillas > 0 && sp.flnBases == 0)
         if (candidates.isEmpty)
           log("No mountain spaces qualify.  The event has no effect")
         else
@@ -1177,7 +1186,7 @@ object Cards {
           if (num > total)
             Nil
           else {
-            val name = askCandidate(s"Select ${ordinal(num)} coastal space: ", candidates.sorted)
+            val name = askCandidate(s"Select ${ordinal(num)} coastal space: ", candidates)
             name :: selectSpaces(num + 1, total, candidates filterNot (_ == name))
           }
         }
@@ -1211,7 +1220,7 @@ object Cards {
               val savedState = game
               try {
                 val source = askCandidate(s"\nSelect source space: ", spaceNames(sourceCandidates).sorted)
-                val dest   = askCandidate(s"Select destination space: ", (selectedNames filterNot (_ == source)).sorted)
+                val dest   = askCandidate(s"Select destination space: ", (selectedNames filterNot (_ == source)))
                 val sp     = game.getSpace(source)
                 val most   = (6 - totalMoved) min movableCubes(sp).total
                 val num    = askInt(s"Move how many cubes from $source to $dest", 0, most)
@@ -1237,7 +1246,7 @@ object Cards {
         }
             
         val numSpaces = askInt("How many coastal spaces do you wish to select", 2, 3)
-        val selectedNames = selectSpaces(1, numSpaces, spaceNames(game.algerianSpaces filter (_.coastal)))
+        val selectedNames = selectSpaces(1, numSpaces, algerianCandidates(_.coastal))
         nextChoice(selectedNames)
       },
       (role: Role) => ()
@@ -1280,14 +1289,12 @@ object Cards {
           if (num > total)
             Nil
           else {
-            val name = askCandidate(s"Select ${ordinal(num)} city: ", candidates.sorted)
+            val name = askCandidate(s"Select ${ordinal(num)} city: ", candidates)
             name :: selectCities(num + 1, total, candidates filterNot (_ == name))
           }
         }
         
-        selectCities(1, 2, spaceNames(game.spaces filter (_.isCity))) foreach { city =>
-          addPlus1PopMarker(city)
-        }
+        selectCities(1, 2, spaceCandidates(_.isCity)) foreach addPlus1PopMarker
       },
       (role: Role) => {
         // Flee the country: The stacking limit for Bases in Morocco and
