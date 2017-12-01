@@ -1360,6 +1360,17 @@ object Cards {
       (role: Role) => {
         // Rally dissident insurgents: Replace up to 3 Guerrillas in 1 Sector
         // with an equal number of Algerian Police.
+        val candidates = algerianCandidates(sp => sp.isSector && sp.totalGuerrillas > 0)
+        if (candidates.isEmpty)
+          log("The event has no effect")
+        else {
+          val name = askCandidate("Select sector with guerrillas: ", candidates)
+          val guerrillas = askPieces(game.getSpace(name).pieces, 3, GUERRILLAS,
+                                 Some(s"Select guerrillas to remove from $name"))
+          removeToAvailableFrom(name, guerrillas)
+          val police = askPiecesToPlace(name, List(AlgerianPolice), guerrillas.total)
+          placePieces(name, police)
+        }
       },
       (role: Role) => {
         // Private army mistreats civilians: Set any 1 Sector with Algerian
