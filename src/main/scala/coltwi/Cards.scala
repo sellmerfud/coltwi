@@ -197,7 +197,7 @@ object Cards {
               num
             }
             else {
-              val name = askCandidate("Select space to remove french cubes: ", spaceCandidates(_.frenchCubes > 0))
+              val name = askCandidate("\nSelect space to remove french cubes: ", spaceCandidates(_.frenchCubes > 0))
               val sp = game.getSpace(name)
               val num = askInt(s"Remove how many total cubes from $name", 0, sp.frenchCubes min remaining)
               if (num > 0) {
@@ -384,7 +384,7 @@ object Cards {
           def affectNeutral(candidates: List[String], remaining: Int): Unit = {
             if (remaining > 0 && candidates.nonEmpty) {
               println()
-              val name = askCandidate("Select a non-terrorized neutral space: ", candidates)
+              val name = askCandidate("\nSelect a non-terrorized neutral space: ", candidates)
               val choices  = List("support" -> s"Set $name to Support", "oppose" -> s"Set $name to Opposition")
               setSupport(name, if (askMenu(choices).head == "support") Support else Oppose)
               affectNeutral(candidates filterNot (_ == name), remaining - 1)
@@ -609,7 +609,7 @@ object Cards {
         else if (candidates.size == 1)
           candidates.head
         else
-          askCandidate("Select a city: ", candidates)
+          askCandidate("\nSelect a city: ", candidates)
 
         if (name == "")
           log("All cities are already Neutral.  The event has no effect")
@@ -740,7 +740,7 @@ object Cards {
           def nextSpace(remaining: Int): Unit = {
             val candiates = algerianCandidates(canAffect)
             if (remaining > 0 && candiates.nonEmpty) {
-              val name = askCandidate("Select space: ", candiates)
+              val name = askCandidate("\nSelect space: ", candiates)
               setSupport(name, Support)
               nextSpace(remaining - 1)
             }
@@ -1059,7 +1059,7 @@ object Cards {
         }
         choice match {
           case "commit" => increaseCommitment(1)
-          case "space"  => setSupport(askCandidate("Select space: ", candidates), Support)
+          case "space"  => setSupport(askCandidate("\nSelect space: ", candidates), Support)
           case _        => log("The event has no effect")
         }
       },
@@ -1101,7 +1101,7 @@ object Cards {
         else {
           val candidates = spaceCandidates(_.totalGuerrillas > 0)
           if (candidates.nonEmpty) {
-            val name      = askCandidate("Select space to remove guerrilla: ", candidates)
+            val name      = askCandidate("\nSelect space to remove guerrilla: ", candidates)
             val sp        = game.getSpace(name)
             val guerrilla = askPieces(sp.pieces, 1, GUERRILLAS)
             removeToCasualties(name, guerrilla)
@@ -1186,7 +1186,7 @@ object Cards {
           if (num > total)
             Nil
           else {
-            val name = askCandidate(s"Select ${ordinal(num)} coastal space: ", candidates)
+            val name = askCandidate(s"\nSelect ${ordinal(num)} coastal space: ", candidates)
             name :: selectSpaces(num + 1, total, candidates filterNot (_ == name))
           }
         }
@@ -1289,7 +1289,7 @@ object Cards {
           if (num > total)
             Nil
           else {
-            val name = askCandidate(s"Select ${ordinal(num)} city: ", candidates)
+            val name = askCandidate(s"\nSelect ${ordinal(num)} city: ", candidates)
             name :: selectCities(num + 1, total, candidates filterNot (_ == name))
           }
         }
@@ -1364,7 +1364,7 @@ object Cards {
         if (candidates.isEmpty)
           log("The event has no effect")
         else {
-          val name = askCandidate("Select sector with guerrillas: ", candidates)
+          val name = askCandidate("\nSelect sector with guerrillas: ", candidates)
           val guerrillas = askPieces(game.getSpace(name).pieces, 3, GUERRILLAS,
                                  Some(s"Select guerrillas to remove from $name"))
           removeToAvailableFrom(name, guerrillas)
@@ -1497,7 +1497,7 @@ object Cards {
           new Bot.CriteriaFilter[Space]("Support Space", _.isSupport))
           
         val name = if (role == Gov)
-          askCandidate("Select sector: ", algerianCandidates(_.isSector))
+          askCandidate("\nSelect sector: ", algerianCandidates(_.isSector))
         else //  role == Fln
           Bot.topPriority(game.algerianSpaces filter stripeyHoleUnshaded, priorities).name
 
@@ -1559,7 +1559,32 @@ object Cards {
         // (may be Underground, but Guerrillas before bases) to Available
         // if any there.
         if (role == Gov) {
-          // To be done
+          val destName = askCandidate("\nSelect mountain sector: ", algerianCandidates(_.isMountains))
+          val dest = game.getSpace(destName)
+          val withMovableTroops = (sp: Space) => sp.name != destName && sp.frenchTroops > 0
+          val movableTroops = game.totalOnMap(_.frenchTroops) - dest.frenchTroops
+          val mostTroops = 4 min movableTroops
+          val total = askInt(s"Move how many French troops to $destName", 0, mostTroops)
+          def moveTroops(remaining: Int): Unit = if (remaining > 0) {
+            val name = askCandidate("\nSelect space with French troops: ", algerianCandidates(withMovableTroops))
+            val sp   = game.getSpace(name)
+            val num  = askInt(s"Move how many French Troops out of $name", 0, remaining min sp.frenchTroops)
+            movePieces(Pieces(frenchTroops = num), name, destName)
+            moveTroops(remaining - num)
+          }
+          
+          if (total == movableTroops)
+            for (sp <- game.algerianSpaces filter withMovableTroops)
+              movePieces(sp.only(FrenchTroops), sp.name, destName)
+          else
+            moveTroops(total)
+          
+          val guerrillas = if (dest.totalGuerrillas <= 2)
+            dest.pieces.only(GUERRILLAS)
+          else
+            askPieces(dest.pieces, 2, GUERRILLAS)
+          val bases = Pieces(flnBases = (2 - guerrillas.total) min dest.flnBases)
+          removeToAvailableFrom(destName, guerrillas + bases)
         }
         else { // role == Fln
           val priorities = List(
