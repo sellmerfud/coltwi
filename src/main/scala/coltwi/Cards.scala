@@ -1713,6 +1713,20 @@ object Cards {
       (role: Role) => {
         // Inter-Wilaya wrangling: Replace up to 2 FLN Bases in any spaces
         // in Algeria with 1 guerrilla each. No change in commitment.
+        def replaceBases(remaining: Int): Unit = {
+          val candidates = algerianCandidates(_.flnBases > 0)
+          if (remaining > 0 && candidates.nonEmpty) {
+            val name = askCandidate("Select Algerian space with an FLN base: ", candidates)
+            removeToAvailableFrom(name, Pieces(flnBases = 1))
+            if (game.guerrillasAvailable > 0)
+              placePieces(name, Pieces(hiddenGuerrillas = 1))
+            replaceBases(remaining - 1)
+          }
+        }
+        if (game.hasAlgerianSpace(_.flnBases > 0))
+          replaceBases(2)
+        else
+          log("There are no FLN bases in Algeria.  The event has no effect")
       },
       (role: Role) => {
         // Productive meeting:  Place up to 2 FLN bases in any spaces in
