@@ -580,14 +580,18 @@ object Human {
   object Deploy extends GovSpecial {
     override def toString() = "Deploy"
     val moveFilter     = (sp: Space) => sp.isCity || sp.isGovControlled || sp.hasGovBase 
-    val resettleFilter = (sp: Space) => !sp.isResettled && sp.basePop == 1 && (sp.isGovControlled || sp.hasGovBase)
+    val resettleFilter = (sp: Space) => sp.isSector && !sp.isResettled && sp.basePop == 1 && 
+                           (sp.isGovControlled || sp.hasGovBase)
     def availPieces = {
       val pieceTypes = if (momentumInPlay(MoBalkyConscripts)) List(FrenchTroops, GovBases) 
                        else List(FrenchTroops, FrenchPolice, GovBases)
       game.availablePieces.only(pieceTypes)
     }
     def getMoveCandidates     = spaceNames(game.algerianSpaces filter moveFilter).toSet
-    def getResettleCandidates = spaceNames(game.algerianSpaces filter resettleFilter).toSet
+    def getResettleCandidates = if (game.pivotalCardsPlayed(PivotalMobilization))
+      spaceNames(game.algerianSpaces filter resettleFilter).toSet
+    else
+      Set.empty[String]
     
     // Move pieces or resettle
     override def execute(params: Params): Boolean = {

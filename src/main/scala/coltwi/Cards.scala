@@ -1766,9 +1766,13 @@ object Cards {
     // ------------------------------------------------------------------------
     // #61 Special Instructions
     // Play if current event marked for FLN and FLN is 2nd eligible
-    entry(new Card(61, "Morocco and Tunisia Independent", Single, false, false,
-      () => NoEvent,
-      (role: Role) => (),
+    entry(new Card(61, "Morocco and Tunisia Independent", Single, false, AlwaysPlay,
+      () => Unshaded,
+      (role: Role) => {
+        log("Morocco and Tunisia are now independent.")
+        log("FLN may now enter them, Rally and Extort there, etc.")
+        log("Set the Border Zone Status Marker to zero.")
+      },
       (role: Role) => () // Single event
     )),
     
@@ -1784,7 +1788,7 @@ object Cards {
     // ------------------------------------------------------------------------
     // #63 Special Instructions
     // Bot will never play this event
-    entry(new Card(63, "OAS", Single, false, AlwaysPlay,
+    entry(new Card(63, "OAS", Single, false, false,
       () => NoEvent,
       (role: Role) => (),
       (role: Role) => () // Single event
@@ -1793,14 +1797,36 @@ object Cards {
     // ------------------------------------------------------------------------
     entry(new Card(64, "Mobilization", Single, false, false,
       () => NoEvent,
-      (role: Role) => (),
+      (role: Role) => {
+        // Move any number of pieces from Out of Play to Available, up to the one-half the current
+        // Commitment level (round up), at no cost in Commitment. Government may now Resettle Pop 1
+        // Sectors (4.2.1
+        val maxPieces = game.outOfPlay.totalOf(FRENCH_PIECES) min ((game.commitment + 1) / 2)
+        val num       = askInt("Move how many Out of Play pieces to available", 0, maxPieces)
+        val pieces    = askPieces(game.outOfPlay, num, FRENCH_PIECES)
+        
+        movePiecesFromOutOfPlayToAvailable(pieces)
+        log("The Government may now Resettle Pop 1 Sectors.")
+      },
       (role: Role) => () // Single event
     )),
     
     // ------------------------------------------------------------------------
     entry(new Card(65, "Recall De Gaulle", Single, false, false,
       () => NoEvent,
-      (role: Role) => (),
+      (role: Role) => {
+        
+        // May play if CouP D’etat has been played. See 5.1.5, 5.1.7., 6.2.1. 
+        // Allows play of OAS Pivotal Event. Government may now also Train in 
+        // any Pop 1+ space with Government control and Troops and Police (Pacify 
+        // still only 1 space per card and 1 shift per Pacify).
+        //
+        // Each Resource Phase: Gov’t Resources increased only by Commitment;
+        // French Casualties do not affect Commitment. This card remains in effect
+        // for the rest of the game unless cancelled by CouP D’etat Pivotal Event.
+        log("Recall De Gaulle is not in effect.")
+        
+      },
       (role: Role) => () // Single event
     )),
     
@@ -1809,7 +1835,43 @@ object Cards {
     // If FLN wins die roll, reduce Commitment.
     entry(new Card(66, "Coup d'etat", Single, false, false,
       () => NoEvent,
-      (role: Role) => (),
+      (role: Role) => {
+        // May play once per Campaign; retain this card. See 5.1.5.
+        // Each player rolls 1d6.
+        // 
+        // If Government rolls higher: 
+        // reCall De gaulle and/or OAS Events cancelled if in play; 
+        // add Commitment = lower of the 2 die rolls; add Resources = sum of the 2 rolls.
+        //
+        // If FLN rolls higher: choice of: 
+        // remove Troops = lower of the 2 die rolls from map or Available to Out of Play 
+        // (FLN may choose, no change in Commitment); 
+        // OR 
+        // subtract Commitment = lower of the 2 die rolls
+        //
+        //  If tied, no change (but card has been played).
+        
+        val govDie = dieRoll
+        val flnDie = dieRoll
+        log(s"Government die roll: $govDie")
+        log(s"FLN die roll       : $flnDie")
+        
+        if (govDie == flnDie)
+          log("The event has no effect")
+        else if (govDie > flnDie) {
+          // If Gov wins roll cancel Recall De Gaulle
+          // Would also cancel/prevent OAS, but Bot never plays it...
+          if (game.recallDeGaulleInEffect) {
+            game = game.copy(recallDeGaulleCancelled = true)
+            log("The Recall De Gaulle pivotal event is cancelled")
+          }
+          increaseCommitment(govDie min flnDie)
+          increaseResources(Gov, govDie + flnDie)
+        }
+        else
+          decreaseCommitment(govDie min flnDie)
+          
+      },
       (role: Role) => () // Single event
     )),
     

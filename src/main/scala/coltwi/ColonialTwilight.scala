@@ -133,6 +133,7 @@ object ColonialTwilight {
     def isPropagandaCard(num: Int)  = PropCards contains num
     def isGovPivotalCard(num: Int)  = GovPivotalCards contains num
     def isFlnPivotalCard(num: Int)  = FlnPivotalCards contains num
+    def isPivotalCard(num: Int)     = isGovPivotalCard(num) || isFlnPivotalCard(num)
     def apply(num: Int): Card       = deckMap(num)
     def cards: List[Card]           = deckMap.valuesIterator.toList.sorted
   }
@@ -290,6 +291,7 @@ object ColonialTwilight {
   val ALGERIAN_CUBES = List(AlgerianPolice, AlgerianTroops)
   val CUBES          = FRENCH_CUBES ::: ALGERIAN_CUBES
   val GUERRILLAS     = List(HiddenGuerrillas, ActiveGuerrillas)
+  val FRENCH_PIECES  = List(FrenchPolice, FrenchTroops, GovBases)
   
   
   def owner(t: PieceType) = if (FLNPieces contains t) Fln else Gov
@@ -524,7 +526,7 @@ object ColonialTwilight {
     def prohibitedTrainSector = momentumInPlay(MoHardendAttitudes) && isSector && !isSupport  
     
     def normalTrain         = isCity || hasGovBase
-    def recallDeGaulleTrain = isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0
+    def recallDeGaulleTrain = game.recallDeGaulleInEffect && isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0
     def moghazniTrain       = momentumInPlay(MoMoghazni) && isSector && isSupport && isGovControlled
     
     def canTrain          = (normalTrain || recallDeGaulleTrain || moghazniTrain) && !prohibitedTrainSector
@@ -700,20 +702,21 @@ object ColonialTwilight {
     turn: Int,
     numberOfPropCards: Int,
     spaces: List[Space],
-    franceTrack: Int             = 0,
-    borderZoneTrack: Int         = 0,
-    commitment: Int              = 0,
-    resources: Resources         = Resources(),
-    outOfPlay: Pieces            = Pieces(),
-    casualties: Pieces           = Pieces(),
-    sequence: SequenceOfPlay     = SequenceOfPlay(),
-    capabilities: List[String]   = Nil,
-    momentum: List[String]       = Nil,
-    currentCard: Option[Int]     = None,
-    propCardsPlayed: Int         = 0,
-    pivotalCardsPlayed: Set[Int] = Set.empty,  // Coup d'Etat will be removed after each propaganda round
-    coupdEtatPlayedOnce: Boolean = false,
-    history: Vector[String]      = Vector.empty) {
+    franceTrack: Int                 = 0,
+    borderZoneTrack: Int             = 0,
+    commitment: Int                  = 0,
+    resources: Resources             = Resources(),
+    outOfPlay: Pieces                = Pieces(),
+    casualties: Pieces               = Pieces(),
+    sequence: SequenceOfPlay         = SequenceOfPlay(),
+    capabilities: List[String]       = Nil,
+    momentum: List[String]           = Nil,
+    currentCard: Option[Int]         = None,
+    propCardsPlayed: Int             = 0,
+    pivotalCardsPlayed: Set[Int]     = Set.empty,  // Coup d'Etat will be removed after each propaganda round
+    coupdEtatPlayedOnce: Boolean     = false,
+    recallDeGaulleCancelled: Boolean = false,
+    history: Vector[String]          = Vector.empty) {
     
     val algerianSpaces = spaces filterNot (_.isCountry)
     val countrySpaces  = spaces filter (_.isCountry)
@@ -723,6 +726,7 @@ object ColonialTwilight {
     val franceTrackLetter = ('A' + franceTrack).toChar
     
     def moroccoTunisiaIndependent = pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent)
+    def recallDeGaulleInEffect    = pivotalCardsPlayed(PivotalRecallDeGaulle) && !recallDeGaulleCancelled
 
     def isFinalCampaign = propCardsPlayed == (numberOfPropCards - 1)
     def govPivotalAvailable = deck.GovPivotalCards -- pivotalCardsPlayed
@@ -731,7 +735,7 @@ object ColonialTwilight {
     def govPivotalPlayable: Set[Int] = govPivotalAvailable filter {
       case PivotalCoupdEtat      => true
       case PivotalMobilization   => flnScore >= 15
-      case PivotalRecallDeGaulle => coupdEtatPlayedOnce
+      case PivotalRecallDeGaulle => coupdEtatPlayedOnce && !recallDeGaulleCancelled
       case n => throw new IllegalStateException(s"Non gov pivotal card: $n") 
     }
     
@@ -862,8 +866,15 @@ object ColonialTwilight {
       val b = new ListBuffer[String]
       b += "Active Events"
       b += separator()
+      val pivotals = for {
+        num  <- pivotalCardsPlayed.toList.sorted
+        card  = deck(num)
+        extra = if (num == PivotalRecallDeGaulle && recallDeGaulleCancelled) " (Cancelled)" else ""
+      } yield s"$card$extra"
+      
+      wrap("Pivotal     : ", pivotals)     foreach (l => b += l)
       wrap("Capabilities: ", capabilities) foreach (l => b += l)
-      wrap("Momentum    : ", momentum) foreach (l => b += l)
+      wrap("Momentum    : ", momentum)     foreach (l => b += l)
       b.toList
     }
     
@@ -2036,13 +2047,13 @@ object ColonialTwilight {
   object ShowCmd extends Command {
     val name = "show"
     val desc = """Display the current game state
-                 |  show scenario     - current score and difficulty level
-                 |  show status       - current score, resources, etc.
-                 |  show available    - pieces that are currently available
-                 |  show capabilities - capabilies and momentum events in play
-                 |  show sequence     - 1st eligible, 2nd eligible and actions taken
-                 |  show all          - entire game state
-                 |  show <space>      - state of a single space""".stripMargin
+                 |  show scenario  - current score and difficulty level
+                 |  show status    - current score, resources, etc.
+                 |  show available - pieces that are currently available
+                 |  show events    - pivotal events, capabilies and momentum events in play
+                 |  show sequence  - 1st eligible, 2nd eligible and actions taken
+                 |  show all       - entire game state
+                 |  show <space>   - state of a single space""".stripMargin
     val action = (param: Option[String]) => showCommand(param)
   }
   
@@ -2072,6 +2083,7 @@ object ColonialTwilight {
                               |  adjust france track  - Current position of the Franch track
                               |  adjust border zone   - Current position of the Border Zone track
                               |  adjust casualties    - Pieces in the casualties box
+                              |  adjust pivotal       - Pivotal cards in play
                               |  adjust out of play   - Pieces in the out of play box
                               |  adjust capabilities  - Capabilities currently in play
                               |  adjust momentum      - Momentum events currently in play
@@ -2124,11 +2136,13 @@ object ColonialTwilight {
       log()
       log(s"The $role plays pivotal event: ${card.numAndName}")
       log(s"Place the ${card.name} card on top of the discard pile")
-      log(s"Place $role cylinder on the First Eligible space on the sequence track")
+      log(s"Place the ${role} eligibility cylinder in the ${Event} box")
       log(s"Place $other cylinder on the Second Eligible space on the sequence track")
-      game = game.copy(sequence           = SequenceOfPlay(firstEligible = role, secondEligible = other),
+      game = game.copy(sequence           = SequenceOfPlay(firstEligible = role, secondEligible = other, firstAction = Some(Event)),
                        currentCard        = Some(card.number),
                        pivotalCardsPlayed = game.pivotalCardsPlayed + card.number)
+     card.executeUnshaded(role)
+     
     }
   }
   
@@ -2174,6 +2188,7 @@ object ColonialTwilight {
     // FLN Bot never plays Suez Crisis or OAS pivotal events.
     val flnPivots = (game.pivotalCardsPlayed(PivotalMobilization)) &&
                     !game.moroccoTunisiaIndependent                &&
+                    !deck.isPivotalCard(card.number)               &&
                     game.sequence.numActed == 0                    &&
                     game.sequence.secondEligible == Fln            &&
                     card.markedForFLN
@@ -2345,7 +2360,7 @@ object ColonialTwilight {
   
   def showCommand(param: Option[String]): Unit = {
     val options =  "scenario" :: "status" :: "available" :: "casualties" :: "out of play" ::
-                   "capabilities" :: "sequence" :: "all" :: SpaceNames
+                   "events" :: "sequence" :: "all" :: SpaceNames
                   
     askOneOf("Show: ", options, param, allowNone = true, allowAbort = false) foreach {
       case "scenario"     => printSummary(game.scenarioSummary)
@@ -2353,7 +2368,7 @@ object ColonialTwilight {
       case "available"    => printSummary(game.availablePiecesSummary)
       case "casualties"   => printSummary(game.casualtiesSummary)
       case "out of play"  => printSummary(game.outOfPlaySummary)
-      case "capabilities" => printSummary(game.eventSummary)
+      case "events"       => printSummary(game.eventSummary)
       case "sequence"     => printSummary(game.sequenceSummary)  // card, 1st eligible, etc.
       case "all"          => printGameState()
       case name           => printSummary(game.spaceSummary(name))
@@ -2384,7 +2399,7 @@ object ColonialTwilight {
   
   def adjustSettings(param: Option[String]): Unit = {
     val options = List("gov resources", "fln resources", "commitment", "france track", "border zone",
-                       "casualties", "out of play", "capabilities", "momentum", "bot debug"
+                       "casualties", "out of play", "pivotal", "capabilities", "momentum", "bot debug"
                        ).sorted ::: SpaceNames
 
     val choice = askOneOf("[Adjust] (? for list): ", options, param, allowNone = true, allowAbort = false)
@@ -2396,6 +2411,7 @@ object ColonialTwilight {
       case "border zone"   => adjustBorderZoneTrack()
       case "casualties"    => adjustCasualties()
       case "out of play"   => adjustOutOfPlay()
+      case "pivotal"       => adjustPivotal()
       case "capabilities"  => adjustCapabilities()
       case "momentum"      => adjustMomentum()
       case "bot debug"     => adjustBotDebug()
@@ -2579,6 +2595,10 @@ object ColonialTwilight {
     getNextResponse()
   }
   
+  def adjustPivotal(): Unit = {
+    println("\nadjust pivotal has not been implemented.")
+  }
+    
   def adjustCapabilities(): Unit = {
     var included = game.capabilities
     var excluded = AllCapabilities filterNot included.contains
