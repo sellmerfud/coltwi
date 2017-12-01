@@ -1385,6 +1385,12 @@ object Cards {
       () => if (game hasAlgerianSpace (_.algerianCubes > 0)) Shaded else NoEvent,
       (role: Role) => {
         // Freelancers: Remove up to 1 Guerrilla in each City space to available.
+        val cities = (game.spaces filter (sp => sp.isCity && sp.totalGuerrillas > 0)).sortBy(_.name)
+        if (cities.isEmpty)
+          log("There are no guerrillas in any cities.  The event has no effect")
+        else
+          for (sp <- cities)
+            removeToAvailableFrom(sp.name, askPieces(sp.pieces, 1, GUERRILLAS))
       },
       (role: Role) => {
         // Army supresses pied-noir hotheads: Remove 1-3 (1d6 halved round up)
@@ -1490,10 +1496,8 @@ object Cards {
           new Bot.HighestScorePriority[Space]("Highest population", _.population),
           new Bot.CriteriaFilter[Space]("Support Space", _.isSupport))
           
-        val name = if (role == Gov) {
-          // To be done
-          Medea
-        }
+        val name = if (role == Gov)
+          askCandidate("Select sector: ", algerianCandidates(_.isSector))
         else //  role == Fln
           Bot.topPriority(game.algerianSpaces filter stripeyHoleUnshaded, priorities).name
 
