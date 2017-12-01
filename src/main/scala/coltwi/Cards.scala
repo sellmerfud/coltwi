@@ -1616,6 +1616,28 @@ object Cards {
       (role: Role) => {
         // Infrastructure: Place up to 2 government bases anywhere in
         // Algeria from Available or Out of Play.
+        val mostOutOfPlay = 2 min game.outOfPlay.govBases
+        val fromOutOfPlay = if (mostOutOfPlay == 0) 0
+                            else askInt("Place how many bases from Out of Play", 0, mostOutOfPlay)
+        val mostInPlay  = (2 - fromOutOfPlay) min (game.govBasesAvailable + game.totalOnMap(_.govBases))
+        val fromInPlay = if (fromOutOfPlay == 2) 0
+                         else askInt("Place how many bases from available", 0, mostInPlay)
+                             
+        def placeBases(remaining: Int, oop: Boolean): Unit = if (remaining > 0) {
+          val prompt = s"\nSelect space for base from ${if (oop) "Out of Play" else "Available"}: "
+          val name   = askCandidate(prompt, algerianCandidates(_.canTakeBase))
+          if (oop)
+            placePiecesFromOutOfPlay(name, Pieces(govBases = 1))
+          else {
+            if (game.govBasesAvailable == 0) 
+              voluntaryRemoval(1, GovBases, Set(name))
+            placePieces(name, Pieces(govBases = 1))
+          }
+          placeBases(remaining - 1, oop)
+        }
+        
+        placeBases(fromOutOfPlay, true)
+        placeBases(fromInPlay, false)
       },
       (role: Role) => {
         // Siphoned: FLN +3 resources

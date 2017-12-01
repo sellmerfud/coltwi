@@ -1442,7 +1442,8 @@ object ColonialTwilight {
         val name = askCandidate(s"\nSelect space to remove $pieceType: ", candidates)
         val numInSpace = game.getSpace(name).numOf(pieceType) min numLeft
         val minFromSpace = 1 max (numLeft - (avail - numInSpace))
-        val x = askInt(s"Remove how many", minFromSpace, numInSpace)
+        val x = if (minFromSpace == numInSpace) numInSpace
+                else askInt(s"Remove how many", minFromSpace, numInSpace)
         nextSpace(removed :+ (name -> x), candidates filterNot (_ == name))
       }
     }
@@ -2513,17 +2514,17 @@ object ColonialTwilight {
 
       val choices = List(
         "french troops", "french police", "algerian troops", "algerian police", 
-        "guerrillas", "government bases")
+        "guerrillas", "gov bases")
       askOneOf(s"[Adjust casualty] (? for list): ", choices, allowNone = true, allowAbort = false) match {
         case None =>
         case Some(casualty) =>
           casualty match {
-            case "french troops"    => adjustPiece(FrenchTroops)
-            case "french police"    => adjustPiece(FrenchPolice)
-            case "algerian troops"  => adjustPiece(AlgerianTroops)
-            case "algerian police"  => adjustPiece(AlgerianPolice)
-            case "guerrillas"       => adjustPiece(HiddenGuerrillas)
-            case "government bases" => adjustPiece(GovBases)
+            case "french troops"   => adjustPiece(FrenchTroops)
+            case "french police"   => adjustPiece(FrenchPolice)
+            case "algerian troops" => adjustPiece(AlgerianTroops)
+            case "algerian police" => adjustPiece(AlgerianPolice)
+            case "guerrillas"      => adjustPiece(HiddenGuerrillas)
+            case "gov bases"       => adjustPiece(GovBases)
           }
           getNextResponse()
       }
@@ -2562,15 +2563,15 @@ object ColonialTwilight {
       println(game.availablePieces)
       println()
 
-      val choices = List("french troops", "french police", "guerrillas", "government bases")
+      val choices = List("french troops", "french police", "guerrillas", "gov bases")
       askOneOf(s"[Adjust out of play] (? for list): ", choices, allowNone = true, allowAbort = false) match {
         case None =>
         case Some(piece) =>
           piece match {
-            case "french troops"    => adjustPiece(FrenchTroops)
-            case "french police"    => adjustPiece(FrenchPolice)
-            case "guerrillas"       => adjustPiece(HiddenGuerrillas)
-            case "government bases" => adjustPiece(GovBases)
+            case "french troops" => adjustPiece(FrenchTroops)
+            case "french police" => adjustPiece(FrenchPolice)
+            case "guerrillas"    => adjustPiece(HiddenGuerrillas)
+            case "gov bases"     => adjustPiece(GovBases)
           }
           getNextResponse()
       }
@@ -2654,7 +2655,7 @@ object ColonialTwilight {
         
       var choices = List(
         "support", "terror", "french troops", "french police", "algerian troops", "algerian police", 
-        "underground guerrillas", "active guerrillas", "government bases", "fln bases")
+        "underground guerrillas", "active guerrillas", "gov bases", "fln bases")
       if (sp.isCity) choices = "plus 1 population" :: choices
       if (sp.isSector && sp.basePop == 1) choices = "resettled" :: choices
       if (sp.isCountry) choices = "plus 1 base" :: choices
@@ -2669,7 +2670,7 @@ object ColonialTwilight {
             case "algerian police"        => adjustPieces(name, AlgerianPolice)
             case "underground guerrillas" => adjustPieces(name, HiddenGuerrillas)
             case "active guerrillas"      => adjustPieces(name, ActiveGuerrillas)
-            case "government bases"       => adjustPieces(name, GovBases)
+            case "gov bases"              => adjustPieces(name, GovBases)
             case "fln bases"              => adjustPieces(name, FlnBases)
             case "terror"                 => adjustTerrorMarkers(name)
             case "resettled"              => adjustResettled(name)
