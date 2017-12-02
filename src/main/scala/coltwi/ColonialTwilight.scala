@@ -2137,7 +2137,9 @@ object ColonialTwilight {
       log(s"The $role plays pivotal event: ${card.numAndName}")
       log(s"Place the ${card.name} card on top of the discard pile")
       log(s"Place the ${role} eligibility cylinder in the ${Event} box")
-      log(s"Place $other cylinder on the Second Eligible space on the sequence track")
+      if (game.sequence.secondEligible != other)
+        log(s"Place $other cylinder on the Second Eligible space on the sequence track")
+      log()
       game = game.copy(sequence           = SequenceOfPlay(firstEligible = role, secondEligible = other, firstAction = Some(Event)),
                        currentCard        = Some(card.number),
                        pivotalCardsPlayed = game.pivotalCardsPlayed + card.number)
