@@ -92,7 +92,7 @@ object Human {
     val sp = game.getSpace(spaceName)
     val prompt = s"\nDo you wish pay 1 resource to remove 1 guerrilla from $spaceName (y/n) "
     if (momentumInPlay(MoPeaceOfTheBrave) && game.resources(Gov) > 0 && sp.totalGuerrillas > 0 && askYorN(prompt))
-      removeToAvailableFrom(spaceName, askPieces(sp.pieces, 1, GUERRILLAS))
+      removeToAvailable(spaceName, askPieces(sp.pieces, 1, GUERRILLAS))
   }
     
   sealed trait GovOp {
@@ -235,10 +235,8 @@ object Human {
             nextPacify(completed, candidates)
           else {
             decreaseResources(Gov, num * 2)
-            if (sp.terror > 0)
-              removeTerror(name, if (num == maxInSpace) num-1 else num)
-            if (num == maxInSpace)
-              increaseSupport(name, 1)
+            removeTerror(name, num min sp.terror)
+            increaseSupport(name, (num - sp.terror) max 0)
             nextPacify(completed+1, candidates - name)
           }
         }
@@ -562,7 +560,7 @@ object Human {
           case xs                               => xs filter (_.isSupport)
         }
         val priorities = List(
-          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+          new Bot.HighestPriority[Space]("Highest population", _.population))
         
         val sp = Bot.topPriority(candidates, priorities)
         log(s"Fln places a guerrilla in one assault spaces due to capability: $CapRevenge")
@@ -675,7 +673,7 @@ object Human {
                 placePieces(dest, pieces)
                 deployed += dest -> (deployed(dest) + pieces)
               case (_, AB) =>
-                removeToAvailableFrom(src, pieces)
+                removeToAvailable(src, pieces)
               case (_,  _) =>
                 movePieces(pieces, src, dest)
                 deployed += dest -> (deployed(dest) + pieces)
@@ -1006,5 +1004,112 @@ object Human {
         game = savedState
     }
   }
+ 
+  def propSupportPhase(): Unit = {
+    val canPacify = (sp: Space) => !sp.isSupport &&
+                                    sp.population > 0 &&
+                                    sp.isGovControlled &&
+                                    sp.totalTroops > 0 &&
+                                    sp.totalPolice > 0
+    def nextPacify(pacified: Set[String]): Unit = {
+      val candidates = spaceNames(game.algerianSpaces filter (sp => !pacified(sp.name) && canPacify(sp))).sorted
+      if (candidates.nonEmpty && game.resources(Gov) > 1) {
+        val choices = (candidates map (name => name -> s"Pacify in $name")) :+ ("done" -> "Finished pacifying")
+        askMenu(choices).head match {
+          case "done" =>
+          case name =>
+            val sp = game.getSpace(name)
+            val maxLevels = if (sp.isOppose) 2 else 1
+            val maxInSpace = sp.terror + maxLevels
+            val maxPossible = maxInSpace min (game.resources(Gov) / 2)
+            val choices = List.range(maxPossible, -1, -1) map {
+              case 0                                     => (0 -> "Do not pacify in this space")
+              case 2 if sp.terror == 0                   => (1 -> "Shift two levels to support")
+              case 1 if sp.terror == 0 && maxLevels == 1 => (1 -> "Shift one level to support")
+              case 1 if sp.terror == 0                   => (1 -> "Shift one level to neutral")
+              case n if n == maxInSpace                  => (n -> "Remove all terror markers and shift to support")
+              case n if n == maxInSpace - 1              => (n -> "Remove all terror markers and shift to neutral")
+              case n                                     => (n -> s"Remove ${amountOf(n, "terror marker")}")
+            }
+            println("\nChoose one:")
+            val num = askMenu(choices, allowAbort = false).head
+            if (num == 0)
+              nextPacify(pacified)
+            else {
+              log(s"\nGovernment pacifies: $name")
+              decreaseResources(Gov, num * 2)
+              removeTerror(name, num min sp.terror)
+              increaseSupport(name, (num - sp.terror) max 0)
+              nextPacify(pacified + name)
+            }
+        }
+      }
+    }
+    log("Government pacification")
+    nextPacify(Set.empty)
+  }
   
+  // The Government player may move any Troops on the map to any Cities or spaces with friendly Bases.
+  // Any Police on the map may move to any Government Controlled spaces.
+  def propRedeployPhase(preRedeployState: GameState): Unit = {
+    def redeployTroops(): Unit = {
+      val sources = spaceNames(game.algerianSpaces filter (_.totalTroops > 0)).sorted
+      val dests   = spaceNames(game.algerianSpaces filter (sp => sp.isCity || sp.govBases > 0))
+      
+      if (sources.nonEmpty) {
+        val choices = List("redeploy" -> "Choose troops to redeploy",
+                           "done"     -> "Finished redeploying troops")
+        askMenu(choices, allowAbort = false).head match {
+          case "done" =>
+          case "redeploy" =>
+            try {
+              val srcName  = askCandidate("\nSelect space with troops: ", sources)
+              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName))
+              val src      = game.getSpace(srcName)
+              val num      = askInt(s"Deploy how many troops out of $srcName", 0, src.totalTroops)
+              val troops   = askPieces(src.pieces, num, TROOPS)
+              redeployPieces(troops, srcName, destName)
+            }
+            catch {
+              case AbortAction => // Aborts only the current redeploy, no state has changed
+            }
+            redeployTroops()
+        }
+      }
+    }
+    
+    def redeployPolice(): Unit = {
+      // Dest candidates must use the pre redeploy state because changes in control are
+      // not done until all redeployment (both sides) is done.
+      val sources = spaceNames(game.algerianSpaces filter (_.totalPolice > 0)).sorted
+      val dests   = spaceNames(preRedeployState.algerianSpaces filter (_.isGovControlled))
+      
+      val onlyOneSpace = (sources.size == 1 && dests.size == 1 && sources.head == dests.head)
+      if (sources.nonEmpty && dests.nonEmpty && !onlyOneSpace) {
+        val choices = List("redeploy" -> "Choose police to redeploy",
+                           "done"     -> "Finished redeploying police")
+        askMenu(choices, allowAbort = false).head match {
+          case "done" =>
+          case "redeploy" =>
+            try {
+              val srcName  = askCandidate("\nSelect space with police: ", sources)
+              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName))
+              val src      = game.getSpace(srcName)
+              val num      = askInt(s"Deploy how many police out of $srcName", 0, src.totalPolice)
+              val police   = askPieces(src.pieces, num, POLICE)
+              redeployPieces(police, srcName, destName)
+            }
+            catch {
+              case AbortAction => // Aborts only the current redeploy, no state has changed
+            }
+            redeployPolice()
+        }
+      }
+    }
+    
+    log("\nGovernment troop redeploymnet")
+    redeployTroops()
+    log("\nGovernment police redeploymnet")
+    redeployPolice()
+  }
 }

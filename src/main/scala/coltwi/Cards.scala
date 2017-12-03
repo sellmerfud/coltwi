@@ -80,9 +80,9 @@ object Cards {
 
   
   val OppositionPriorities = List(
-    new Bot.CriteriaFilter[Space]("Is at support", _.isSupport),
-    new Bot.HighestScorePriority[Space]("Highest population", _.population),
-    new Bot.CriteriaFilter[Space]("Gov cannot train", sp => !sp.canTrain))
+    new Bot.BooleanPriority[Space]("Is at support",      _.isSupport),
+    new Bot.HighestPriority[Space]("Highest population", _.population),
+    new Bot.BooleanPriority[Space]("Gov cannot train",  !_.canTrain))
     
   def spaceCandidates(criteria: Space => Boolean): List[String] = 
     spaceNames(game.spaces filter criteria).sorted
@@ -269,7 +269,7 @@ object Cards {
                 val num = askInt(s"Remove how many guerrillas from $name", 0, remaining min sp.totalGuerrillas)
                 if (num > 0) {
                   val guerrillas = askPieces(sp.pieces, num, GUERRILLAS)
-                  removeToAvailableFrom(name, guerrillas)
+                  removeToAvailable(name, guerrillas)
                 }
                 removeGuerrillas(remaining - num)
               }
@@ -321,7 +321,7 @@ object Cards {
                 val num = askInt(s"Remove how many guerrillas from $name", 0, remaining min sp.totalGuerrillas)
                 if (num > 0) {
                   val guerrillas = askPieces(sp.pieces, num, GUERRILLAS)
-                  removeToAvailableFrom(name, guerrillas)
+                  removeToAvailable(name, guerrillas)
                 }
                 removeGuerrillas(remaining - num)
               }
@@ -366,7 +366,7 @@ object Cards {
           else {
             val sp = game.getSpace(country)
             val guerrillas = askPieces(sp.pieces, 3 min sp.totalGuerrillas, GUERRILLAS)
-            removeToAvailableFrom(country, guerrillas)
+            removeToAvailable(country, guerrillas)
           }
         }
         else
@@ -461,8 +461,8 @@ object Cards {
         val num = (die + 1) / 2   // Half rounded up
         
         val DestPriorities = List(
-          new Bot.CriteriaFilter[Space]("Cities", _.isCity),
-          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+          new Bot.BooleanPriority[Space]("Cities",             _.isCity),
+          new Bot.HighestPriority[Space]("Highest population", _.population))
         
         val sources = game.spaces filter flnNavySource
         val dests   = game.algerianSpaces filter flnNavyDest
@@ -658,7 +658,7 @@ object Cards {
               val most   = remaining min sp.totalOf(types)
               val num    = askInt(s"Remove how many $desc from $name", 0, most)
               val pieces = askPieces(sp.pieces, num, types)
-              removeToAvailableFrom(name, pieces)
+              removeToAvailable(name, pieces)
               removePieces(remaining - num, types, desc)
             }
           }
@@ -718,9 +718,9 @@ object Cards {
           log("No FLN bases in Morocco or Tunisia: The event has no effect")
         else {
           if (game.getSpace(Morocco).flnBases > 0)
-            removeToAvailableFrom(Morocco, Pieces(flnBases = 1))
+            removeToAvailable(Morocco, Pieces(flnBases = 1))
           if (game.getSpace(Tunisia).flnBases > 0)
-            removeToAvailableFrom(Tunisia, Pieces(flnBases = 1))
+            removeToAvailable(Tunisia, Pieces(flnBases = 1))
         }
       },
       (role: Role) => {
@@ -776,7 +776,7 @@ object Cards {
               val most   = remaining min sp.totalGuerrillas
               val num    = askInt(s"Remove how many guerrillas from $name", 0, most)
               val pieces = askPieces(sp.pieces, num, GUERRILLAS)
-              removeToAvailableFrom(name, pieces)
+              removeToAvailable(name, pieces)
               removeGuerrillas(remaining - num)
             }
           }
@@ -794,12 +794,12 @@ object Cards {
         else {
           var numRemoved = 0
           val basePriorities = List(
-            new Bot.CriteriaFilter[Space]("Has FLN Base", _.flnBases > 0),
-            new Bot.LowestScorePriority[Space]("Least guerrillas", _.totalGuerrillas))
+            new Bot.BooleanPriority[Space]("Has FLN Base",    _.flnBases > 0),
+            new Bot.LowestPriority[Space]("Least guerrillas", _.totalGuerrillas))
           val otherPriorities = List(
-            new Bot.CriteriaFilter[Space]("Guerrilla present", _.totalGuerrillas > 0),
-            new Bot.CriteriaFilter[Space]("Gov control", _.isGovControlled),
-            new Bot.HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas))
+            new Bot.BooleanPriority[Space]("Guerrilla present", _.totalGuerrillas > 0),
+            new Bot.BooleanPriority[Space]("Gov control",       _.isGovControlled),
+            new Bot.HighestPriority[Space]("Most guerrillas",   _.totalGuerrillas))
         
           log(s"Die roll for pieces is $piecesDie.  $Fln may remove up to $numPieces enemy pieces")
           def doRemove(candiates: List[Space], pieceType: PieceType): Unit = {
@@ -810,7 +810,7 @@ object Cards {
                 Bot.topPriority(candiates, otherPriorities)
               val num = (numPieces - numRemoved) min sp.pieces.numOf(pieceType)
               numRemoved += num
-              removeToAvailableFrom(sp.name, Pieces().set(num, pieceType))
+              removeToAvailable(sp.name, Pieces().set(num, pieceType))
               doRemove(candiates filterNot(_.name == sp.name), pieceType)
             }
           }
@@ -840,7 +840,7 @@ object Cards {
           log("There are no FLN pieces in Algiers.  The event has no effect")
         else {
           val flnPieces = sp.only(Seq(HiddenGuerrillas, ActiveGuerrillas, FlnBases))
-          removeToAvailableFrom(Algiers, flnPieces)
+          removeToAvailable(Algiers, flnPieces)
           increaseCommitment(sp.flnBases)
           increaseResources(Fln, sp.totalFln)
         }
@@ -912,8 +912,8 @@ object Cards {
       }
       else { // role == Fln
         val priorities = List(
-          new Bot.CriteriaFilter[Space]("Is at support", _.isSupport),
-          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+          new Bot.BooleanPriority[Space]("Is at support",      _.isSupport),
+          new Bot.HighestPriority[Space]("Highest population", _.population))
         
         def placeTerror(selected: Set[String], remaining: Int): Unit = {
           if (remaining > 0 && game.resources(Fln) > 0 && game.terrorMarkersAvailable > 0) {
@@ -1066,8 +1066,8 @@ object Cards {
       (role: Role) => {
         // Voter Supression: Set 1 sector to Neutral
         val priorities = List(
-          new Bot.HighestScorePriority[Space]("Highest population", _.population),
-          new Bot.CriteriaFilter[Space]("Gov cannot train", sp => !sp.canTrain))
+          new Bot.HighestPriority[Space]("Highest population", _.population),
+          new Bot.BooleanPriority[Space]("Gov cannot train",  !_.canTrain))
         
         val candidates = game.algerianSpaces filter elections
         if (candidates.nonEmpty) {
@@ -1114,10 +1114,10 @@ object Cards {
         // Martyr: Add 1 Guerrilla in any space from 
         // available or out of play, +1d6 FLN resources
         val priorities = List(
-          new Bot.CriteriaFilter[Space]("Support space", _.isSupport),
-          new Bot.CriteriaFilter[Space]("Unprotected base", sp => sp.flnBases > 0 && (sp.hiddenGuerrillas == 0 || sp.totalGuerrillas < 2)),
-          new Bot.CriteriaFilter[Space]("Friendly pieces", _.totalFln > 0),
-          new Bot.CriteriaFilter[Space]("In Algeria", !_.isCountry))
+          new Bot.BooleanPriority[Space]("Support space",    _.isSupport),
+          new Bot.BooleanPriority[Space]("Unprotected base", sp => sp.flnBases > 0 && (sp.hiddenGuerrillas == 0 || sp.totalGuerrillas < 2)),
+          new Bot.BooleanPriority[Space]("Friendly pieces",  _.totalFln > 0),
+          new Bot.BooleanPriority[Space]("In Algeria",      !_.isCountry))
         val sp = Bot.topPriority(game.spaces, priorities)
         if (game.outOfPlay.hiddenGuerrillas > 0)
           placePiecesFromOutOfPlay(sp.name, Pieces(hiddenGuerrillas = 1))
@@ -1160,7 +1160,7 @@ object Cards {
         // Remove all guerrillas there to available.
         def nextSpace(remaining: Int, candidates: List[String]): Unit = if (remaining > 0 && candidates.nonEmpty) {
           val name = askCandidate("\nSelect mountain space with guerrillas and no FLN base: ", candidates)
-          removeToAvailableFrom(name, game.getSpace(name).only(GUERRILLAS))
+          removeToAvailable(name, game.getSpace(name).only(GUERRILLAS))
           nextSpace(remaining - 1, candidates filterNot (_ == name))
         }
 
@@ -1344,12 +1344,12 @@ object Cards {
         // Force K: Replace up to all Algerian Police in any 1 sector with
         // an equal number of Guerrillas.
         val priorities = List(
-          new Bot.HighestScorePriority[Space]("Most alerian police", _.algerianPolice),
-          new Bot.HighestScorePriority[Space]("Most Fln pieces", _.totalFln),
-          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+          new Bot.HighestPriority[Space]("Most alerian police", _.algerianPolice),
+          new Bot.HighestPriority[Space]("Most Fln pieces",     _.totalFln),
+          new Bot.HighestPriority[Space]("Highest population",  _.population))
         val sp = Bot.topPriority(game.algerianSpaces filter moghazniCriteria, priorities)
         val guerrillas = Bot.getGuerrillasToPlace(sp.algerianPolice, sp)
-        removeToAvailableFrom(sp.name, Pieces(algerianPolice = guerrillas.total))
+        removeToAvailable(sp.name, Pieces(algerianPolice = guerrillas.total))
         Bot.placeGuerrillas(sp.name, guerrillas)
       }
     )),
@@ -1367,7 +1367,7 @@ object Cards {
           val name = askCandidate("\nSelect sector with guerrillas: ", candidates)
           val guerrillas = askPieces(game.getSpace(name).pieces, 3, GUERRILLAS,
                                  Some(s"Select guerrillas to remove from $name"))
-          removeToAvailableFrom(name, guerrillas)
+          removeToAvailable(name, guerrillas)
           val police = askPiecesToPlace(name, List(AlgerianPolice), guerrillas.total)
           placePieces(name, police)
         }
@@ -1390,14 +1390,14 @@ object Cards {
           log("There are no guerrillas in any cities.  The event has no effect")
         else
           for (sp <- cities)
-            removeToAvailableFrom(sp.name, askPieces(sp.pieces, 1, GUERRILLAS))
+            removeToAvailable(sp.name, askPieces(sp.pieces, 1, GUERRILLAS))
       },
       (role: Role) => {
         // Army supresses pied-noir hotheads: Remove 1-3 (1d6 halved round up)
         // algerian cubes to Available.
         val priorities = List(
-          new Bot.CriteriaFilter[Space]("FLN base", _.flnBases > 0),
-          new Bot.CriteriaFilter[Space]("Support space", _.isSupport))
+          new Bot.BooleanPriority[Space]("FLN base",      _.flnBases > 0),
+          new Bot.BooleanPriority[Space]("Support space", _.isSupport))
         val die   = dieRoll
         val total = (die + 1) / 2
         log(s"Die roll is $die. $Fln may remove $total Algerian cubes")
@@ -1406,7 +1406,7 @@ object Cards {
           if (removed < total && candidates.nonEmpty) {
             val sp = Bot.topPriority(candidates, priorities)
             val num = (total - removed) min sp.pieces.numOf(pieceType)
-            removeToAvailableFrom(sp.name, Pieces().set(num, pieceType))
+            removeToAvailable(sp.name, Pieces().set(num, pieceType))
             removeCubes(removed + num, pieceType, candidates filterNot (_.name == sp.name))
           }
           else
@@ -1441,7 +1441,7 @@ object Cards {
         else {
           val num = sp.totalGuerrillas / 2
           val guerrillas = askPieces(sp.pieces, sp.totalGuerrillas / 2, GUERRILLAS)
-          removeToAvailableFrom(Tunisia, guerrillas)
+          removeToAvailable(Tunisia, guerrillas)
         }
       },
       (role: Role) => {
@@ -1493,8 +1493,8 @@ object Cards {
       // Sector.  Set to Oppose.
       (role: Role) => {
         val priorities = List(
-          new Bot.HighestScorePriority[Space]("Highest population", _.population),
-          new Bot.CriteriaFilter[Space]("Support Space", _.isSupport))
+          new Bot.HighestPriority[Space]("Highest population", _.population),
+          new Bot.BooleanPriority[Space]("Support Space",      _.isSupport))
           
         val name = if (role == Gov)
           askCandidate("\nSelect sector: ", algerianCandidates(_.isSector))
@@ -1508,8 +1508,8 @@ object Cards {
       // Out of Play
       (role: Role) => {
         val priorities = List(
-          new Bot.CriteriaFilter[Space]("None underground", _.hiddenGuerrillas == 0),
-          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+          new Bot.BooleanPriority[Space]("None underground",   _.hiddenGuerrillas == 0),
+          new Bot.HighestPriority[Space]("Highest population", _.population))
         val sp = Bot.topPriority(game.algerianSpaces filter stripeyHoleShaded, priorities)
         val oop = game.outOfPlay.hiddenGuerrillas min 2
         placePiecesFromOutOfPlay(sp.name, Pieces(hiddenGuerrillas = oop))
@@ -1537,7 +1537,7 @@ object Cards {
       },
       (role: Role) => {
         val priorities = List(
-          new Bot.HighestScorePriority[Space]("Highest population", _.population))
+          new Bot.HighestPriority[Space]("Highest population", _.population))
         val sp = Bot.topPriority(game.spaces filter (sp => sp.isCity && sp.isSupport), priorities)
         setSupport(sp.name, Neutral)
       }
@@ -1584,11 +1584,11 @@ object Cards {
           else
             askPieces(dest.pieces, 2, GUERRILLAS)
           val bases = Pieces(flnBases = (2 - guerrillas.total) min dest.flnBases)
-          removeToAvailableFrom(destName, guerrillas + bases)
+          removeToAvailable(destName, guerrillas + bases)
         }
         else { // role == Fln
           val priorities = List(
-            new Bot.LowestScorePriority[Space]("Fewest guerrillas", _.totalGuerrillas))
+            new Bot.LowestPriority[Space]("Fewest guerrillas", _.totalGuerrillas))
           val dest = Bot.topPriority(game.algerianSpaces filter op744, priorities)
           val sources = game.algerianSpaces filter (_.frenchTroops > 0) sortBy (-_.frenchTroops)
           def moveTroops(remaining: Int, sources: List[Space]): Unit = (remaining, sources) match {
@@ -1604,7 +1604,7 @@ object Cards {
           val active = num min dest.activeGuerrillas
           val guerrillas = Pieces(activeGuerrillas = active,
                                   hiddenGuerrillas = (num - active) min dest.hiddenGuerrillas)
-          removeToAvailableFrom(dest.name, guerrillas)
+          removeToAvailable(dest.name, guerrillas)
         }
       },
       (role: Role) => () // Single event
@@ -1717,7 +1717,7 @@ object Cards {
           val candidates = algerianCandidates(_.flnBases > 0)
           if (remaining > 0 && candidates.nonEmpty) {
             val name = askCandidate("Select Algerian space with an FLN base: ", candidates)
-            removeToAvailableFrom(name, Pieces(flnBases = 1))
+            removeToAvailable(name, Pieces(flnBases = 1))
             if (game.guerrillasAvailable > 0)
               placePieces(name, Pieces(hiddenGuerrillas = 1))
             replaceBases(remaining - 1)
@@ -1731,14 +1731,14 @@ object Cards {
       (role: Role) => {
         // Productive meeting:  Place up to 2 FLN bases in any spaces in
         // Algeria for free
-        val hiddenGuerrilla  = new Bot.CriteriaFilter[Space]("Underground", _.hiddenGuerrillas > 0)
-        val atLeastTwo       = new Bot.CriteriaFilter[Space]("2+ guerrillas", _.totalGuerrillas > 1)
-        val noAdjacentTroops = new Bot.CriteriaFilter[Space]("No adjacent troops", 
+        val hiddenGuerrilla  = new Bot.BooleanPriority[Space]("Underground",   _.hiddenGuerrillas > 0)
+        val atLeastTwo       = new Bot.BooleanPriority[Space]("2+ guerrillas", _.totalGuerrillas > 1)
+        val noAdjacentTroops = new Bot.BooleanPriority[Space]("No adjacent troops", 
           sp => !((getAdjacent(sp.name) map game.getSpace) exists (_.totalTroops > 0)))
-        val notResettled     = new Bot.CriteriaFilter[Space]("Not resettled", !_.isResettled)
-        val mountainSpace    = new Bot.CriteriaFilter[Space]("Is mountain", _.isMountains)
-        val lowestPop        = new Bot.LowestScorePriority[Space]("Lowest population", _.population)
-        val lowestCubes      = new Bot.LowestScorePriority[Space]("Lowest cubes", _.totalCubes)
+        val notResettled     = new Bot.BooleanPriority[Space]("Not resettled",   !_.isResettled)
+        val mountainSpace    = new Bot.BooleanPriority[Space]("Is mountain",      _.isMountains)
+        val lowestPop        = new Bot.LowestPriority[Space]("Lowest population", _.population)
+        val lowestCubes      = new Bot.LowestPriority[Space]("Lowest cubes",      _.totalCubes)
 
         val noCubePriorities = List(hiddenGuerrilla, noAdjacentTroops, lowestPop, 
                                     atLeastTwo, mountainSpace, notResettled)

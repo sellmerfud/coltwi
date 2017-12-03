@@ -165,7 +165,7 @@ object Bot {
   def placeGuerrillas(spaceName: String, guerrillas: GuerrillasToPlace): Unit = {
     placePieces(spaceName, Pieces(hiddenGuerrillas = guerrillas.numAvailable))
     guerrillas.fromMap foreach { case FromMap(n, name) => 
-      removeToAvailableFrom(name, Pieces(activeGuerrillas = n))
+      removeToAvailable(name, Pieces(activeGuerrillas = n))
       placePieces(spaceName, Pieces(hiddenGuerrillas = n))
     }
   }
@@ -243,7 +243,7 @@ object Bot {
   
   // A boolean criteria filter
   // Filters the given entries and returns the results.
-  class CriteriaFilter[T](val desc: String, criteria: (T) => Boolean) extends Filter[T] {
+  class BooleanPriority[T](val desc: String, criteria: (T) => Boolean) extends Filter[T] {
     def filter(entries: List[T]) = (entries filter criteria)
   }
   
@@ -251,7 +251,7 @@ object Bot {
   // Applies the given score function to each entry in the input list and
   // takes the highest value.
   // Then returns the list of entries whose score matches that highest value.
-  class HighestScorePriority[T](val desc: String, score: (T) => Int) extends Filter[T] {
+  class HighestPriority[T](val desc: String, score: (T) => Int) extends Filter[T] {
     def filter(entries: List[T]): List[T] = {
       val high = (entries map score).max
       botDebug(s"Highest ($desc): score = $high")
@@ -263,7 +263,7 @@ object Bot {
   // Applies the given score function to each entry in the input list and
   // takes the lowest value.
   // Then returns the list of entries whose score matches that lowest value.
-  class LowestScorePriority[T](val desc: String, score: (T) => Int) extends Filter[T] {
+  class LowestPriority[T](val desc: String, score: (T) => Int) extends Filter[T] {
     def filter(entries: List[T]): List[T] = {
       val low = (entries map score).min
       botDebug(s"Lowest ($desc): score = $low")
@@ -308,8 +308,8 @@ object Bot {
     val last2Cubes = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes == 2 && sp.frenchCubes == 0)
     val lastCube   = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes == 1 && sp.frenchCubes == 0)
     val withPolice = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianPolice > 0)
-    val has2Police = new CriteriaFilter[Space]("2 Police cubes", _.algerianPolice == 1)
-    val hasPolice  = new CriteriaFilter[Space]("Police cube", _.algerianPolice > 0)
+    val has2Police = new BooleanPriority[Space]("2 Police cubes", _.algerianPolice == 1)
+    val hasPolice  = new BooleanPriority[Space]("Police cube",    _.algerianPolice > 0)
     val generic    = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes > 0)
     def bestPiece(pieces: Pieces): Pieces = 
       if (pieces.algerianPolice > 0) Pieces(algerianPolice = 1)
@@ -359,7 +359,7 @@ object Bot {
         log()
         log(s"$Fln executes a Subvert special ability")
         for (SubvertCmd(replace, name, pieces) <- cmds) {
-          removeToAvailableFrom(name, pieces)
+          removeToAvailable(name, pieces)
           if (replace)
             placePieces(name, Pieces(hiddenGuerrillas = 1))
         }
@@ -521,9 +521,9 @@ object Bot {
   }
 
   val TerrorPriorities = List(
-    new CriteriaFilter[Space]("Remove support", _.isSupport),
-    new CriteriaFilter[Space]("Add terror to neutral in final campaign", _.isNeutral && game.terrorMarkersAvailable > 0),
-    new HighestScorePriority[Space]("Highest population", _.population))
+    new BooleanPriority[Space]("Remove support",                          _.isSupport),
+    new BooleanPriority[Space]("Add terror to neutral in final campaign", _.isNeutral && game.terrorMarkersAvailable > 0),
+    new HighestPriority[Space]("Highest population",                      _.population))
   
   def doTerror(): Action = {
     def nextTerror(candidates: List[Space], num: Int): Int = {
@@ -725,20 +725,20 @@ object Bot {
     case object PlaceGuerrillas extends RallyType  // Place guerrillas or flip them underground
     
     val BasePriorities: SpacePriorities = List(
-      new CriteriaFilter[Space]("Has 2+ active & 1+ hidden", sp => sp.activeGuerrillas > 1 && sp.hiddenGuerrillas > 0),
-      new CriteriaFilter[Space]("Has 1+ active & 1+ hidden", sp => sp.activeGuerrillas > 0 && sp.hiddenGuerrillas > 0),
-      new CriteriaFilter[Space]("Has 1+ active",             sp => sp.activeGuerrillas > 0))
+      new BooleanPriority[Space]("Has 2+ active & 1+ hidden", sp => sp.activeGuerrillas > 1 && sp.hiddenGuerrillas > 0),
+      new BooleanPriority[Space]("Has 1+ active & 1+ hidden", sp => sp.activeGuerrillas > 0 && sp.hiddenGuerrillas > 0),
+      new BooleanPriority[Space]("Has 1+ active",             _.activeGuerrillas > 0))
     val UnprotectedBasePriorities: SpacePriorities = List(
-      new CriteriaFilter[Space]("In Algeria",         !_.isCountry),
-      new CriteriaFilter[Space]("With cubes",         _.totalCubes > 0),
-      new CriteriaFilter[Space]("1+ population",      _.population > 0),
-      new LowestScorePriority[Space]("Fewest hidden", _.hiddenGuerrillas))
+      new BooleanPriority[Space]("In Algeria",      !_.isCountry),
+      new BooleanPriority[Space]("With cubes",       _.totalCubes > 0),
+      new BooleanPriority[Space]("1+ population",    _.population > 0),
+      new LowestPriority[Space]("Fewest hidden",     _.hiddenGuerrillas))
     val SupportSectorPriorities: SpacePriorities = List(
-      new HighestScorePriority[Space]("Highest population", _.population))
+      new HighestPriority[Space]("Highest population", _.population))
     val GuerrillasNoBasePriorities: SpacePriorities = List(
-      new CriteriaFilter[Space]("In Algeria",            !_.isCountry),
-      new HighestScorePriority[Space]("Most guerrillas", _.totalGuerrillas),
-      new CriteriaFilter[Space]("No Gov cubes",          _.totalCubes == 0))
+      new BooleanPriority[Space]("In Algeria",     !_.isCountry),
+      new HighestPriority[Space]("Most guerrillas", _.totalGuerrillas),
+      new BooleanPriority[Space]("No Gov cubes",    _.totalCubes == 0))
 
     def execute(): Either[ActionFlowchartNode, Action] = if (turnState.rallyConsidered)
       Left(BotPasses)
@@ -858,7 +858,7 @@ object Bot {
                     decreaseResources(Fln, 1)
                   val numActive = 2 min sp.activeGuerrillas
                   val numHidden = 2 - numActive
-                  removeToAvailableFrom(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden))
+                  removeToAvailable(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden))
                   placePieces(sp.name, Pieces(flnBases = 1))
                   rallySpaces += sp.name
                 }
@@ -1131,11 +1131,11 @@ object Bot {
 
     type MarchPriorities = List[Filter[ExecutedMarch]]
     
-    val LowestCost        = new LowestScorePriority[ExecutedMarch]("Lowest cost",              m => m.cost)
-    val ArrivesUndergroud = new CriteriaFilter[ExecutedMarch]("Guerrillas arrive underground", m => m.anyHidden)
-    val MountainDest      = new CriteriaFilter[ExecutedMarch]("Mountain Destination",          m => m.dest.isMountains)
-    val HighestPopulation = new HighestScorePriority[ExecutedMarch]("Highest population",      m => m.dest.population)
-    val FewestGovCubes    = new LowestScorePriority[ExecutedMarch]("Fewest Gov cubes",         m => m.dest.totalCubes)
+    val LowestCost        = new LowestPriority[ExecutedMarch]("Lowest cost",                    _.cost)
+    val ArrivesUndergroud = new BooleanPriority[ExecutedMarch]("Guerrillas arrive underground", _.anyHidden)
+    val MountainDest      = new BooleanPriority[ExecutedMarch]("Mountain Destination",          _.dest.isMountains)
+    val HighestPopulation = new HighestPriority[ExecutedMarch]("Highest population",            _.dest.population)
+    val FewestGovCubes    = new LowestPriority[ExecutedMarch]("Fewest Gov cubes",               _.dest.totalCubes)
     
     sealed trait MarchType {
       def desc: String
@@ -1569,5 +1569,129 @@ object Bot {
     game = game.copy(sequence = game.sequence.nextAction(action))
   }
   
+   // Spsend up to 2/3 of resources
+   // If Resources are insufficient for Agitation everywhere it is possible, Agitate first for the
+   // - greatest shift
+   // - then where Support
+   // - then where fewest Terror markers
+   // - then randomly. 
+   // Remove Terror only if a shift would be achieved.
+   
+  def propAgitatePhase(): Unit = {
+    def nextAgitate(resRemaining: Int, agitated: Set[String]): Unit = {
+      // Must have enough resource to remove all terror and affect at least 1 shift
+      val canAgitate = (sp: Space) => sp.population > 0  &&
+                                     !sp.isOppose        &&
+                                     sp.totalFln > 0     && 
+                                     !sp.isGovControlled &&
+                                     resRemaining > sp.terror
+      val maxShift = (sp: Space) => (if (sp.isSupport) 2 else 1) min (resRemaining - sp.terror)
+      val priorities = List(
+        new HighestPriority[Space]("Greatest shift", maxShift),
+        new BooleanPriority[Space]("Suppport space", _.isSupport),
+        new LowestPriority[Space]("Fewest terror",   _.terror))
+      
+      // Re-evaluate candidates each time because FLN resources will have changed
+      val candidates = (game.algerianSpaces filter (sp => !agitated(sp.name) && canAgitate(sp)))
+      if (candidates.nonEmpty) {
+        val sp = topPriority(candidates, priorities)
+        log(s"\nFLN agitates: ${sp.name}")
+        val cost = sp.terror + maxShift(sp)
+        decreaseResources(Fln, cost)
+        removeTerror(sp.name, sp.terror)
+        decreaseSupport(sp.name, maxShift(sp))
+        nextAgitate(resRemaining - cost, agitated + sp.name)
+      }
+    }
+    log("FLN agitation")
+    
+    nextAgitate(game.resources(Fln) * 2 / 3, Set.empty)
+  }
+  
+  // The FLN player may now move any Guerrillas from any space or spaces within a given Wilaya,
+  // to any other space or spaces within the same Wilaya with a friendly Base.
+  //
+  // If the "Cross Wilaya Coordination" capability is in effect, then guerrillas can
+  // redeploy to any space in Algeria that has a base.
+  //
+  // The Bot will redeploy to attempt to get at least Pop+1 guerrillas at each base,
+  // no more than 3 guerrillas at each base.  If this is no possible, then spread 
+  // the guerrillas as evenly as possible among the base spaces.
+  // IMPORTANT: Never redeploy the last guerrilla out of a City or a space at Support!
+  def propRedeployPhase(): Unit = {
+    
+    val numNeeded = (sp: Space) =>
+      if (sp.flnBases > 0) (sp.population + 1) - sp.totalGuerrillas max 0
+      else 0
+    val canMove = (sp: Space) =>
+      if (sp.flnBases > 0)                (sp.totalGuerrillas - sp.population + 1) max 0
+      else if (sp.isCity || sp.isSupport) (sp.totalGuerrillas - 1) max 0
+      else                                sp.totalGuerrillas
+    
+    case class Source(sp: Space, canMove: Int)
+    case class Dest(sp: Space, numNeeded: Int)
+    
+    def getSources(spaces: List[Space]) = (spaces map (sp => Source(sp, canMove(sp)))
+                                                  filter (_.canMove > 0))
+    def getDests(spaces: List[Space]) = (spaces map (sp => Dest(sp, numNeeded(sp)))
+                                                filter (_.numNeeded > 0))
+
+    // First to protect bases with no guerrillas
+    // Then were the most are needed
+    val destPriorities = List(
+      new BooleanPriority[Dest]("None in space", d => d.numNeeded == d.sp.population + 1),
+      new HighestPriority[Dest]("Most needed",   _.numNeeded),
+      new HighestPriority[Dest]("Most cubes",    _.sp.totalCubes),
+      new BooleanPriority[Dest]("Support space", _.sp.isSupport))
+      
+    val srcPriorities = List(
+      new BooleanPriority[Source]("Not city/support",       d => !(d.sp.isCity || d.sp.isSupport)),
+      new BooleanPriority[Source]("No trigger Gov Support", d => d.sp.population > 0 && d.sp.totalGov != d.sp.totalFln),
+      new LowestPriority[Source]("Least movers",            _.canMove),
+      new LowestPriority[Source]("Least cubes",             _.sp.totalCubes))
+      
+    val EmptyRelos: Map[String, Map[String, Int]] = Map.empty.withDefaultValue(Map.empty.withDefaultValue(0))
+    def redeployGuerrillas(sources: List[Source], dests: List[Dest], 
+                          redeployments: Map[String, Map[String, Int]] = EmptyRelos): Unit = {
+
+      if (sources.isEmpty || dests.isEmpty) {
+        // Process all of the accumulated redeployments
+        for {
+          (destName, movers) <- redeployments.toList.sortBy(_._1)
+          (srcName, num)     <- movers.toList.sortBy(_._1)
+        } {
+          val sp = game.getSpace(srcName)
+          val a = num min sp.activeGuerrillas
+          val h = (num - a) min sp.hiddenGuerrillas
+          redeployPieces(Pieces(hiddenGuerrillas = h, activeGuerrillas = a), srcName, destName)
+        }
+      }
+      else {
+        val dest = topPriority(dests, destPriorities)
+        val src  = topPriority(sources, srcPriorities)
+        val destName = dest.sp.name
+        val srcName  = src.sp.name
+        val newDests = (dests map (d => if (d.sp.name == destName) d.copy(numNeeded = d.numNeeded - 1) else d)
+                             filter (_.numNeeded > 0))
+        val newSrcs  = (sources map (s => if (s.sp.name == srcName) s.copy(canMove = s.canMove - 1) else s)
+                             filter (_.canMove > 0))
+        val destMap          = redeployments(destName)
+        val newDestMap       = destMap + (srcName -> (destMap(srcName) + 1))
+        val newRedeployments = redeployments + (destName -> newDestMap)
+        redeployGuerrillas(newSrcs, newDests, newRedeployments)
+      }
+    }
+    
+    log("\nFLN guerrilla redeploymnet")
+    
+    if (capabilityInPlay(CapXWilayaCoord)) {
+      log(s"Guerrillas can redeploy across Wilaya borders: $CapXWilayaCoord")
+      redeployGuerrillas(getSources(game.algerianSpaces), getDests(game.algerianSpaces))
+    }
+    else
+      for (wilaya <- ALL_WILAYAS)
+        redeployGuerrillas(getSources(game.wilayaSpaces(wilaya)), getDests(game.wilayaSpaces(wilaya)))
+  
+  }
 }
   
