@@ -60,6 +60,7 @@ object Bot {
   ) {
     
     val multipleSpaces       = maxSpaces map (_ > 1) getOrElse true
+    val limOpOnly            = !multipleSpaces
     val canDoSpecialActivity = specialActivityAllowed && !specialActivityTaken
     
     def addMovingGroup(name: String, pieces: Pieces): TurnState =
@@ -431,7 +432,7 @@ object Bot {
   object LimOpAndZeroResources extends ActionFlowchartNode {
     val desc = "LimOp and Resources == 0?"
     def execute(): Either[ActionFlowchartNode, Action] = {
-      if (game.resources(Fln) == 0 && !turnState.multipleSpaces)
+      if (game.resources(Fln) == 0 && turnState.limOpOnly)
         Left(BotPasses)
       else
         Left(EachAlgerianBaseHasUnderground)
@@ -532,7 +533,7 @@ object Bot {
   
   def doTerror(): Action = {
     def nextTerror(candidates: List[Space], num: Int): Int = {
-      if (candidates.isEmpty || (num == 1 && !turnState.multipleSpaces))
+      if (candidates.isEmpty || (num == 1 && turnState.limOpOnly))
         num
       else {
         val target = topPriority(candidates, TerrorPriorities)
@@ -673,7 +674,7 @@ object Bot {
       val canKillAtLeastTwo = effectiveSpaces match {
         case 0                                   => false
         case 1                                   => noAmbushKillTwoCandidates.nonEmpty
-        case _ if !turnState.multipleSpaces      => noAmbushKillTwoCandidates.nonEmpty // LimOp
+        case _ if turnState.limOpOnly            => noAmbushKillTwoCandidates.nonEmpty // LimOp
         case _ if turnState.canDoSpecialActivity => noAmbushCandidates.size + ambushCandidates.size > 1
         case _                                   => noAmbushCandidates.size > 1
       }
@@ -682,7 +683,7 @@ object Bot {
       if (!momentumInPlay(MoPeaceTalks) && canKillAtLeastTwo) {
         log()
         log(s"$Fln chooses: Attack")
-        val numSpaces = if (!turnState.multipleSpaces || oneResourceOnly) {
+        val numSpaces = if (turnState.limOpOnly || oneResourceOnly) {
           val target = noAmbushKillTwoCandidates.sorted(spacePriority(false)).head
           attackInSpace(target.name, false)
           1
@@ -749,17 +750,17 @@ object Bot {
       Left(BotPasses)
     else {
       val supportCity = (sp: Space) => sp.isCity && sp.isSupport
+      // If a lim-Op (turnState.limOpOnly) then the no cubes requirement is skipped because the
+      // Bot will go first on the next turn.
       val placeBaseNoCubes = (sp: Space) => !supportCity(sp)   &&
                                             sp.canTakeBase     &&
                                             (sp.isCountry || sp.flnBases == 0) &&
-                                            sp.totalCubes == 0 &&
+                                            (sp.totalCubes == 0 || turnState.limOpOnly) &&
                                             sp.totalGuerrillas >= 3
-      val minGWithCubes = if (turnState.multipleSpaces) 4 else 3
-      val placeBaseWithCubes = (sp: Space) => !supportCity(sp)  &&
-                                              sp.canTakeBase    &&
-                                              sp.totalCubes > 0 &&
-                                              sp.flnBases == 0  &&
-                                              sp.totalGuerrillas >= minGWithCubes
+      val placeBase = (sp: Space) => !supportCity(sp)  &&
+                                     sp.canTakeBase    &&
+                                     sp.flnBases == 0  &&
+                                     sp.totalGuerrillas > 3
       val unprotectedBase = (sp: Space) => !supportCity(sp) &&
                                            sp.flnBases > 0  &&
                                            ((!sp.isCountry && sp.population > 0 && sp.hiddenGuerrillas < 2) ||
@@ -790,16 +791,17 @@ object Bot {
         (sp.flnBases > 0 || willControl)
       }
       val guerrillasNoBase = (sp: Space) => !supportCity(sp)  && sp.flnBases == 0 && sp.totalGuerrillas > 0
-      val baseNoCubeCandidates   = spaceNames(game.spaces filter onlyIn filter placeBaseNoCubes)
-      val baseWithCubeCandidates = spaceNames(game.spaces filter onlyIn filter placeBaseWithCubes)
-      val canPlaceBase        = game.flnBasesAvailable > 0 && (baseNoCubeCandidates.nonEmpty || baseWithCubeCandidates.nonEmpty)
-      val guerrillasWithBases = game.totalOnMap(sp => if (sp.flnBases > 0) sp.totalGuerrillas else 0)
+      
+      val baseNoCubeCandidates = spaceNames(game.spaces filter onlyIn filter placeBaseNoCubes)
+      val baseCandidates       = spaceNames(game.spaces filter onlyIn filter placeBase) filterNot baseNoCubeCandidates.contains
+      val canPlaceBase         = game.flnBasesAvailable > 0 && (baseNoCubeCandidates.nonEmpty || baseCandidates.nonEmpty)
+      val guerrillasWithBases  = game.totalOnMap(sp => if (sp.flnBases > 0) sp.totalGuerrillas else 0)
       
       var rallySpaces = Set.empty[String]
       var shiftedFranceTrack = false
       var agitateSpace: Option[String] = None
       var reservedResources = 0
-      val maxTotalRallies = if (!turnState.multipleSpaces)                               1
+      val maxTotalRallies = if (turnState.limOpOnly)                                     1
                             else if (game.resources(Fln) < 9 || turnState.freeOperation) 1000 // No limit
                             else                                                         game.resources(Fln) * 2 / 3
       
@@ -917,7 +919,7 @@ object Bot {
         }
         
         doRallies(baseNoCubeCandidates, PlaceBase, BasePriorities)
-        doRallies(baseWithCubeCandidates, PlaceBase, BasePriorities)
+        doRallies(baseCandidates, PlaceBase, BasePriorities)
         val unprotectedBaseCandidates = spaceNames(game.spaces filter onlyIn filter (sp => (!hasRallied(sp.name) && unprotectedBase(sp))))
         doRallies(unprotectedBaseCandidates, PlaceGuerrillas, UnprotectedBasePriorities)
         // France track?
@@ -1241,7 +1243,7 @@ object Bot {
       override def maxTargets: Int = 1
       override def numNeeded(sp: Space): Int = 3  // Exactly 3
       override def hiddenOnly = false
-      override def preferHidden = true
+      override def preferHidden = false
       override def candidates = {
         val popZeroSpace = (sp: Space) => sp.isSector && !sp.isResettled && sp.population == 0 &&
                                           sp.flnBases == 0 && sp.canTakeBase
@@ -1263,7 +1265,7 @@ object Bot {
     else {
       def ALL = 1000  // Unlimited march targets
       var marchDestinations = Set.empty[String]
-      val maxTotalDestinations = if (!turnState.multipleSpaces)                               1
+      val maxTotalDestinations = if (turnState.limOpOnly)                                     1
                                  else if (game.resources(Fln) < 9 || turnState.freeOperation) 1000 // No limit
                                  else                                                         game.resources(Fln) * 2 / 3
             
@@ -1314,8 +1316,7 @@ object Bot {
                   if (path.isAdjacent)
                     log(s"$Fln marches adjacent from ${path.source} to ${path.dest}")
                   else {
-                    log(s"$Fln marches from ${path.source} to ${path.dest} via:")
-                    wrap("  ", path.spaces.tail.init) foreach (log(_))
+                    log(s"$Fln marches from ${path.source} to ${path.dest} via: ${andList(path.spaces.tail.init)}")
                     if (guerrillas.hiddenGuerrillas > 0 && activates) {
                       val activateSpace = path.activatedBySpace(num).get
                       log(s"Entering $activateSpace activates the hidden guerrillas")
@@ -1373,18 +1374,21 @@ object Bot {
             build(optimized)
           }
           else if (preferHidden) {
+            // If we find a path that delivers at least one hidden guerrilla, then use it.
+            // Otherwise accept one that delivers only active guerrillas.
+            val optimizedHidden = (marches map (_.bestNonActivatePath(paidFor))).sortBy(_.paths.head)(nonActivatePathOrder(paidFor))
+            val optimized = (marches map (_.cheapest(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
+            build(optimizedHidden) orElse build(optimized)
+          }
+          else {
             // We consider paths that will allow a hidden guerrilla to arrive
-            // But if if is cheaper to have all activated guerillas arrive then that will win
+            // But if if is cheaper to have any activated guerillas arrive, then that will win
             val optimizedHidden = (marches map (_.bestNonActivatePath(paidFor))).sortBy(_.paths.head)(nonActivatePathOrder(paidFor))
             val optimized = (marches map (_.cheapest(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
             (build(optimizedHidden), build(optimized)) match {
               case (Some(withHidden), Some(regular)) if withHidden.cost(paidFor) <= regular.cost(paidFor) => Some(withHidden)
               case (withHidden, regular) => regular orElse withHidden
             }
-          }
-          else {
-            val optimized = (marches map (_.cheapest(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
-            build(optimized)
           }
         }
     
@@ -1533,7 +1537,7 @@ object Bot {
       // There may be more than one possible path of travel.  Remove any that would
       // activate guerrillas if we are only interested in hidden guerrillas.
       // Later we will pick the least costly among the multiple paths.
-      val inWilaya = if (!turnState.multipleSpaces || capabilityInPlay(CapDeadZones))
+      val inWilaya = if (turnState.limOpOnly || capabilityInPlay(CapDeadZones))
         Nil  // Cannot make multiple marches to reach destination
       else
         for {

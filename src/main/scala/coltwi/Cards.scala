@@ -1716,7 +1716,7 @@ object Cards {
         def replaceBases(remaining: Int): Unit = {
           val candidates = algerianCandidates(_.flnBases > 0)
           if (remaining > 0 && candidates.nonEmpty) {
-            val name = askCandidate("Select Algerian space with an FLN base: ", candidates)
+            val name = askCandidate("\nSelect Algerian space with an FLN base: ", candidates)
             removeToAvailable(name, Pieces(flnBases = 1))
             if (game.guerrillasAvailable > 0)
               placePieces(name, Pieces(hiddenGuerrillas = 1))
@@ -1726,7 +1726,7 @@ object Cards {
         if (game.hasAlgerianSpace(_.flnBases > 0))
           replaceBases(2)
         else
-          log("There are no FLN bases in Algeria.  The event has no effect")
+          log("\nThere are no FLN bases in Algeria.  The event has no effect")
       },
       (role: Role) => {
         // Productive meeting:  Place up to 2 FLN bases in any spaces in
