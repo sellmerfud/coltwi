@@ -266,7 +266,7 @@ object Human {
       def nextChoice(): Unit = {
         val sourceCandidates = validSpaces(params)(sourceFilter)
         val choices = List(
-          choice(totalMoved < 6 && sourceCandidates.nonEmpty, "police",   s"Select a police cubes to move"),
+          choice(totalMoved < 6 && sourceCandidates.nonEmpty, "police",   s"Select police cubes to move"),
           choice(specialActivity.allowed,                     "special",  s"Perform a special activity"),
           choice(true,                                        "done",     s"Finished selecting police cubes"),
           choice(true,                                        "abort",    s"Abort the entire $Gov turn")
@@ -328,6 +328,8 @@ object Human {
               activateGuerrillas(params, Some(movingGroups.toList.head._1))
             else
               activateGuerrillas(params, None)
+            if (specialActivity.allowed && askYorN("Perform a special activity? (y/n) "))
+              executeSpecialActivity(TroopLift::Neutralize::Nil, params)
         }
       }
     
@@ -661,7 +663,7 @@ object Human {
         if askYorN(s"Deploy pieces out of $src (y/n) ")
         dest <- deploySpaces filterNot (_ == src)
       } {
-        val validTypes = if (game.getSpace(dest).totalBases == 2) FrenchCubes else FrenchPieces 
+        val validTypes = if (dest == AB || game.getSpace(dest).canTakeBase) FrenchPieces else FrenchCubes
         val srcPieces = if (src == AB) availPieces.only(validTypes) 
                         else           game.getSpace(src).only(validTypes) - deployed(src)
         if (srcPieces.total > 0 && numDeployed < 6) {
@@ -735,10 +737,10 @@ object Human {
         def liftTroops(src: String, dst: String): Unit = {
           val (srcSpace, dstSpace) = (game.getSpace(src), game.getSpace(dst))
           if (srcSpace.totalTroops > 0) {
-            askInt(s"Lift how many troops from $src to $dst", 0, srcSpace.totalTroops) match {
+            askInt(s"Lift how many French troops from $src to $dst", 0, srcSpace.frenchTroops) match {
               case 0   =>
               case num => 
-                val (pieces, swept) = askTroops(srcSpace, movingGroups(src), num)
+                val (pieces, swept) = askFrenchTroops(srcSpace, movingGroups(src), num)
                 movePieces(pieces, src, dst)
                 movingGroups.remove(src, swept)
                 movingGroups.add(dst, swept)
@@ -751,11 +753,11 @@ object Human {
         log(s"May select up to ${maxSpaces} spaces")
         
         val selectedSpaces = selectSpaces(Nil).reverse
-        val withTroops = selectedSpaces filter (name => game.getSpace(name).totalTroops > 0)
+        val withTroops = selectedSpaces filter (name => game.getSpace(name).frenchTroops > 0)
         
         if (withTroops.isEmpty) {
           println()
-          println("\nNone of the selected spaces contains contains troops!")
+          println("\nNone of the selected spaces contains contains French troops!")
           pause()
           false
         }
@@ -770,27 +772,25 @@ object Human {
     // This is a specialized version of the askPieces() functions that distinguishes 
     // between troops that have already moved (for sweep) and those that haven't.
     // Returns (total pieces selected, pieces that are in moving group)
-    def askTroops(pieces: Pieces, movedPieces: Pieces, num: Int): (Pieces, Pieces) = {
-      val troops   = pieces.only(TROOPS)
-      val moved    = movedPieces.only(TROOPS)
+    def askFrenchTroops(pieces: Pieces, movedPieces: Pieces, num: Int): (Pieces, Pieces) = {
+      val troops   = pieces.only(FrenchTroops)
+      val moved    = movedPieces.only(FrenchTroops)
       val notMoved = troops - moved
       
       if (num == troops.total)
         (troops, moved) // Take the lot
       else if (moved.total == 0)
-        (askPieces(troops, num, TROOPS), Pieces())
+        (Pieces(frenchTroops = num), moved)
       else if (moved.total == troops.total) {
-        val p = askPieces(troops, num, TROOPS)
+        val p = Pieces(frenchTroops = num)
         (p, p)
       }
       else {
         println()
         println(s"Not moved in sweep: ${notMoved}")
         println(s"Moved in sweep    : ${moved}")
-        val numNoMove = askInt("Lift how many that have NOT swept", num - moved.total min 0, num min notMoved.total)
-        val nonMovers = askPieces(notMoved, numNoMove, TROOPS, heading = Some("Troops that have NOT swept"))
-        val movers    = askPieces(moved, num - numNoMove, TROOPS, heading = Some("Troops that have swept"))
-        (nonMovers + movers, movers)
+        val numNotSwept = askInt("Lift how many that have NOT swept", num - moved.total min 0, num min notMoved.total)
+        (Pieces(frenchTroops = num), Pieces(frenchTroops = num - numNotSwept))
       }
     }
   }
@@ -949,6 +949,8 @@ object Human {
         println(separator())
         displayGameStateDifferences(game, savedState)
         game = savedState
+        if (askYorN("Do you wish to perform a special activity? (y/n) "))
+          executeSpecialActivity(activities, params)
     }
   }
   
@@ -993,7 +995,8 @@ object Human {
       // actually did.  This affects eligibiliy for the following turn.
       val finalAction = if (game.sequence.numActed == 0) executedAction else action
       
-      log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box")
+      if (game.sequence.numActed == 0)
+        log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box")
       game = game.copy(sequence = game.sequence.nextAction(finalAction))
     }
     catch {
@@ -1015,6 +1018,7 @@ object Human {
       val candidates = spaceNames(game.algerianSpaces filter (sp => !pacified(sp.name) && canPacify(sp))).sorted
       if (candidates.nonEmpty && game.resources(Gov) > 1) {
         val choices = (candidates map (name => name -> s"Pacify in $name")) :+ ("done" -> "Finished pacifying")
+        println()
         askMenu(choices).head match {
           case "done" =>
           case name =>
@@ -1037,6 +1041,7 @@ object Human {
               nextPacify(pacified)
             else {
               log(s"\nGovernment pacifies: $name")
+              log(separator())
               decreaseResources(Gov, num * 2)
               removeTerror(name, num min sp.terror)
               increaseSupport(name, (num - sp.terror) max 0)
@@ -1045,7 +1050,7 @@ object Human {
         }
       }
     }
-    log("Government pacification")
+    log("\nGovernment pacification")
     nextPacify(Set.empty)
   }
   

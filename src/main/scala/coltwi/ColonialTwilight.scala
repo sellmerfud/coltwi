@@ -45,7 +45,8 @@ object ColonialTwilight {
   
   val INTEGER = """(\d+)""".r
   
-  def dieRoll = nextInt(6) + 1
+  def dieRoll = if (true) nextInt(6) + 1
+                else (askOneOf("Enter die roll: ", 1 to 6, allowAbort = false) map (_.toInt)).get
   
   sealed trait Role {
     val name: String
@@ -940,7 +941,7 @@ object ColonialTwilight {
   def removeCapabilityFromPlay(cap: String): Unit = {
     if (game.capabilities contains cap) {
       game = game.copy(capabilities = game.capabilities filterNot (_ == cap))
-      log(s"Remove the capability '$cap' from play")
+      log(s"Remove capability '$cap' from play")
     }
   }
   
@@ -1090,11 +1091,11 @@ object ColonialTwilight {
     assert(orig.name == updated.name, "logControlChange: not the same space!")
     if (orig.control != updated.control) {
       if (updated.control == Uncontrolled)
-        log(s"Remove the ${orig.control} marker from ${orig.name}")
+        log(s"Remove ${orig.control} marker from ${orig.name}")
       else if (orig.control == Uncontrolled)
         log(s"Place ${updated.control} marker in ${orig.name}")
       else
-        log(s"Flip the control marker to ${updated.control} in ${orig.name}")
+        log(s"Flip control marker to ${updated.control} in ${orig.name}")
     }
   }
   
@@ -1102,11 +1103,11 @@ object ColonialTwilight {
     assert(orig.name == updated.name, "logSupportChange: not the same space!")
     if (orig.support != updated.support) {
       if (updated.support == Neutral)
-        log(s"Remove the ${orig.support} marker from ${orig.name}")
+        log(s"Remove ${orig.support} marker from ${orig.name}")
       else if (orig.support == Neutral)
         log(s"Place ${updated.support} marker in ${orig.name}")
       else
-        log(s"Flip the support marker to ${updated.support} in ${orig.name}")
+        log(s"Flip support marker to ${updated.support} in ${orig.name}")
     }
   }
 
@@ -1477,7 +1478,7 @@ object ColonialTwilight {
 
   // Place pieces from the AVAILABLE box in the given map space.
   // There must be enough pieces in the available box or an exception is thrown.
-  def placePieces(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
+  def placePieces(spaceName: String, pieces: Pieces, logControl: Boolean = true): Unit = if (pieces.total > 0) {
     assert(game.availablePieces contains pieces, "Insufficent pieces in the available box")
     
     val sp = game.getSpace(spaceName)
@@ -1485,7 +1486,8 @@ object ColonialTwilight {
     game = game.updateSpace(updated)
     log(s"\nPlace the following pieces from AVAILABLE into $spaceName:")
     wrap("  ", pieces.stringItems) foreach (log(_))
-    logControlChange(sp, updated)
+    if (logControl)
+      logControlChange(sp, updated)
   }
   
   // Place pieces the available box into the out of play box.
@@ -1630,8 +1632,8 @@ object ColonialTwilight {
     var gToCasualties = totalGuerrillasLost / 2
     
     for ((spaceName, lostPieces) <- losses) {
-      log(s"\nLosses for $spaceName:")
-      wrap("  ", lostPieces.stringItems) foreach (log(_))
+      // log(s"\nLosses for $spaceName:")
+      // wrap("  ", lostPieces.stringItems) foreach (log(_))
       val orig = game.getSpace(spaceName)
       removeToCasualties(spaceName, lostPieces.only(GOV_PIECES), logControl = false)
       decreaseCommitment(lostPieces.numOf(GovBases))
@@ -1958,6 +1960,10 @@ object ColonialTwilight {
         resolveEventCard()
         game.sequence.reset()
       }
+      log()
+      log(s"Place the ${newSequence.firstEligible} cylinder in the 1st eligible box")
+      if (game.sequence.secondEligible != newSequence.secondEligible)
+        log(s"Place the ${newSequence.secondEligible} cylinder in the 2nd eligible box")
       game = game.copy(sequence = newSequence)
     }
     catch {
@@ -1997,7 +2003,8 @@ object ColonialTwilight {
       log(s"Turn #${game.turn}")
       log(separator(char = '='))
       log(s"Event card: ${deck(cardNum)}")
-      log(s"${game.sequence.firstEligible} is first eligible")
+      if (!isPropRound)
+        log(s"${game.sequence.firstEligible} is first eligible")
       log(separator(char = '='))
     }
   }

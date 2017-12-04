@@ -40,6 +40,11 @@ import ColonialTwilight._
 object Bot {
 
   def botDebug(msg: => String) = if (game.params.botDebug) println(msg)
+    
+  def botInspect[T](label: String, value: T): T = {
+    botDebug(s"DEBUG ==> $label == $value")
+    value
+  }
   
   // class used to keep track of gobal state variables that
   // can change during the execution of a single turn.
@@ -830,7 +835,6 @@ object Bot {
         }
       }
         
-      
       if (canPlaceBase || ((game.totalOnMap(_.flnBases) * 2) > (guerrillasWithBases + dieRoll/2))) {
         log()
         log(s"$Fln chooses: Rally")
@@ -858,8 +862,9 @@ object Bot {
                     decreaseResources(Fln, 1)
                   val numActive = 2 min sp.activeGuerrillas
                   val numHidden = 2 - numActive
-                  removeToAvailable(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden))
-                  placePieces(sp.name, Pieces(flnBases = 1))
+                  removeToAvailable(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden), logControl = false)
+                  placePieces(sp.name, Pieces(flnBases = 1), logControl = false)
+                  logControlChange(sp, game.getSpace(sp.name))
                   rallySpaces += sp.name
                 }
 
@@ -1141,7 +1146,7 @@ object Bot {
       def desc: String
       def maxTargets: Int = 1000      // Default is no limit
       def hiddenOnly: Boolean         // Only hidden guerrillas wanted in destination
-      def hiddenOverCost: Boolean     // True if not activating is more important than cost
+      def preferHidden: Boolean       // Prefer hidden if possible and cost is equal another path with non-hidden
       def numNeeded(sp: Space): Int   // Number of guerillas need in destination
       def candidates: List[MarchDest] // Return all destinations that match this march type
       def priorities: MarchPriorities // List of priorities to choose among destinations
@@ -1152,7 +1157,7 @@ object Bot {
       override def desc = "March a hidden guerrilla to an exposed base"
       
       override def hiddenOnly = true
-      override def hiddenOverCost = true
+      override def preferHidden = true
       override def numNeeded(sp: Space): Int = 1
       override def candidates = {
         val hasExposedBase = (sp: Space) => sp.flnBases > 0 && sp.hiddenGuerrillas == 0
@@ -1172,7 +1177,7 @@ object Bot {
       
       override def maxTargets: Int = 1
       override def hiddenOnly = game.isFinalCampaign
-      override def hiddenOverCost = true
+      override def preferHidden = true
       override def numNeeded(sp: Space): Int = if (hiddenOnly)
         (2 - sp.pieces.hiddenGuerrillas) max 0
       else
@@ -1198,7 +1203,7 @@ object Bot {
         "March a guerrilla to a support space"
       
       override def hiddenOnly = game.isFinalCampaign
-      override def hiddenOverCost = true
+      override def preferHidden = true
       
       override def numNeeded(sp: Space): Int = if (hiddenOnly)
         (1 - sp.pieces.hiddenGuerrillas) max 0
@@ -1220,7 +1225,7 @@ object Bot {
       override def desc = "March guerillas to remove government control"
       override def maxTargets: Int = 1
       override def hiddenOnly = false
-      override def hiddenOverCost = false
+      override def preferHidden = false
       override def numNeeded(sp: Space): Int = (sp.totalGov - sp.totalFln) max 0
       override def candidates = {
         val canRemoveGovControl = (sp: Space) => sp.isSector && sp.isGovControlled && sp.population > 0 && !sp.isOppose
@@ -1236,7 +1241,7 @@ object Bot {
       override def maxTargets: Int = 1
       override def numNeeded(sp: Space): Int = 3  // Exactly 3
       override def hiddenOnly = false
-      override def hiddenOverCost = true
+      override def preferHidden = true
       override def candidates = {
         val popZeroSpace = (sp: Space) => sp.isSector && !sp.isResettled && sp.population == 0 &&
                                           sp.flnBases == 0 && sp.canTakeBase
@@ -1266,9 +1271,8 @@ object Bot {
       def doMarches(marchType: MarchType, numTargets: Int, candidates: List[MarchDest]): Unit = {
         def executeResolvedDest(resolved: ResolvedDest): Option[ExecutedMarch] = {
           val (newGame, newState, (success, cost, anyHidden)) = tryOperations {
-            if ((marchDestinations ++ resolved.marchSpaces).size < maxTotalDestinations) {
+            if ((marchDestinations ++ resolved.marchSpaces).size <= maxTotalDestinations) {
               val cost = resolved.cost(marchDestinations)
-            
               if (marchDestinations.isEmpty) {
                 log()
                 log(s"$Fln chooses: March")
@@ -1312,13 +1316,12 @@ object Bot {
                   else {
                     log(s"$Fln marches from ${path.source} to ${path.dest} via:")
                     wrap("  ", path.spaces.tail.init) foreach (log(_))
+                    if (guerrillas.hiddenGuerrillas > 0 && activates) {
+                      val activateSpace = path.activatedBySpace(num).get
+                      log(s"Entering $activateSpace activates the hidden guerrillas")
+                    }
                   }
-                  if (guerrillas.hiddenGuerrillas > 0 && activates) {
-                    val activateSpace = path.activatedBySpace(num).get
-                    log(s"Entering $activateSpace activates the hidden guerrillas")
-                  }
-                  else
-                    hiddenArrived = hiddenArrived | (guerrillas.hiddenGuerrillas > 0)
+                  hiddenArrived = hiddenArrived | (guerrillas.hiddenGuerrillas > 0 && !activates)
                   val beforePieces = game.getSpace(path.dest).pieces
                   movePieces(guerrillas, path.source, path.dest, activates)
                   turnState = turnState.addMovingGroup(path.dest, game.getSpace(path.dest).pieces - beforePieces)
@@ -1340,16 +1343,7 @@ object Bot {
     
         // Find the best group of one or more marches from different source spaces
         // that fulfill the given march type.  Return None if the march cannot be fulfilled.
-        def resolveDest(marchDest: MarchDest, totalNeeded: Int, hiddenOnly: Boolean, hiddenOverCost: Boolean, paidFor: Set[String]): Option[ResolvedDest] = {
-          val marches = marchDest.marches
-          // Get the best path in each of our marches
-          val optimized = if (hiddenOnly)
-            (marches filter (_.canMarchHidden) map (_.bestNonActivatePath(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
-          else if (hiddenOverCost)
-            (marches map (_.bestNonActivatePath(paidFor))).sortBy(_.paths.head)(nonActivatePathOrder(paidFor))
-          else
-            (marches map (_.cheapest(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
-        
+        def resolveDest(marchDest: MarchDest, totalNeeded: Int, hiddenOnly: Boolean, preferHidden: Boolean, paidFor: Set[String]): Option[ResolvedDest] = {
           // Iterate through the marches until we get the number of needed guerrillas
           def nextMarch(sortedMarches: List[March], marchesSoFar: List[ResolvedMarch], numMarched: Int, alreadyPaid: Set[String]): List[ResolvedMarch] = {
             if      (numMarched == totalNeeded) marchesSoFar
@@ -1364,10 +1358,33 @@ object Bot {
               nextMarch(sortedMarches.tail, marchesSoFar :+ resolved, numMarched + numThisMarch, alreadyPaid ++ path.spaces.tail.toSet)
             }
           }
-        
-          nextMarch(optimized, Nil, 0, paidFor) match {
-            case Nil             => None
-            case resolvedMarches => Some(ResolvedDest(marchDest.destName, resolvedMarches))
+
+          def build(optimized: List[March]): Option[ResolvedDest] = {
+            nextMarch(optimized, Nil, 0, paidFor) match {
+              case Nil             => None
+              case resolvedMarches => Some(ResolvedDest(marchDest.destName, resolvedMarches))
+            }
+          }
+          
+          val marches = marchDest.marches
+          // Get the best path in each of our marches
+          if (hiddenOnly) {
+            val optimized = (marches filter (_.canMarchHidden) map (_.bestNonActivatePath(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
+            build(optimized)
+          }
+          else if (preferHidden) {
+            // We consider paths that will allow a hidden guerrilla to arrive
+            // But if if is cheaper to have all activated guerillas arrive then that will win
+            val optimizedHidden = (marches map (_.bestNonActivatePath(paidFor))).sortBy(_.paths.head)(nonActivatePathOrder(paidFor))
+            val optimized = (marches map (_.cheapest(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
+            (build(optimizedHidden), build(optimized)) match {
+              case (Some(withHidden), Some(regular)) if withHidden.cost(paidFor) <= regular.cost(paidFor) => Some(withHidden)
+              case (withHidden, regular) => regular orElse withHidden
+            }
+          }
+          else {
+            val optimized = (marches map (_.cheapest(paidFor))).sortBy(_.paths.head)(cheapestPathOrder(paidFor))
+            build(optimized)
           }
         }
     
@@ -1377,7 +1394,7 @@ object Bot {
         
         val topExecDest = if (numTargets == marchType.maxTargets)
           None
-        else if (!marchType.hiddenOnly && marchType.hiddenOverCost) {
+        else if (!marchType.hiddenOnly && marchType.preferHidden) {
           // Try first with hidden guerrillas as a priority, then if that fails
           // with the cheapest route as a priority
           val hiddenFirst = for {
@@ -1403,9 +1420,10 @@ object Bot {
           val other = for {
             marchDest  <- candidates
             totalNeeded = marchType.numNeeded(game.getSpace(marchDest.destName))
-            resolved   <- resolveDest(marchDest, totalNeeded, marchType.hiddenOnly, marchType.hiddenOverCost, marchDestinations);
+            resolved   <- resolveDest(marchDest, totalNeeded, marchType.hiddenOnly, marchType.preferHidden, marchDestinations)
             executed   <- executeResolvedDest(resolved)
           } yield executed
+          
           if (other.nonEmpty) Some(topPriority(other, marchType.priorities)) else None
         }
         
@@ -1453,7 +1471,7 @@ object Bot {
     // Return the guerrillas that are eligible to march out of the space.
     def eligibleGuerrillas(sp: Space, hiddenOnly: Boolean, hiddenFirst: Boolean): Pieces = {
       val allowed = if (hiddenOnly) List(HiddenGuerrillas) else List(ActiveGuerrillas, HiddenGuerrillas)
-      var staying = turnState.movingGroups(sp.name) + sp.pieces.only(FlnBases)
+      var staying = turnState.movingGroups(sp.name)
       var moving  = sp.pieces.only(allowed) - staying
       
       def leaveBehind(num: Int): Unit = {
@@ -1565,7 +1583,8 @@ object Bot {
     }
     
     val action = evaluateNode(LimOpAndZeroResources)
-    log(s"\nPlace the ${Fln} eligibility cylinder in the ${action} box")
+    if (game.sequence.numActed == 0)
+      log(s"\nPlace the ${Fln} eligibility cylinder in the ${action} box")
     game = game.copy(sequence = game.sequence.nextAction(action))
   }
   
@@ -1596,6 +1615,7 @@ object Bot {
       if (candidates.nonEmpty) {
         val sp = topPriority(candidates, priorities)
         log(s"\nFLN agitates: ${sp.name}")
+        log(separator())
         val cost = sp.terror + maxShift(sp)
         decreaseResources(Fln, cost)
         removeTerror(sp.name, sp.terror)
@@ -1603,7 +1623,7 @@ object Bot {
         nextAgitate(resRemaining - cost, agitated + sp.name)
       }
     }
-    log("FLN agitation")
+    log("\nFLN agitation")
     
     nextAgitate(game.resources(Fln) * 2 / 3, Set.empty)
   }
@@ -1624,7 +1644,7 @@ object Bot {
       if (sp.flnBases > 0) (sp.population + 1) - sp.totalGuerrillas max 0
       else 0
     val canMove = (sp: Space) =>
-      if (sp.flnBases > 0)                (sp.totalGuerrillas - sp.population + 1) max 0
+      if (sp.flnBases > 0)                (sp.totalGuerrillas - (sp.population + 1)) max 0
       else if (sp.isCity || sp.isSupport) (sp.totalGuerrillas - 1) max 0
       else                                sp.totalGuerrillas
     
@@ -1683,6 +1703,7 @@ object Bot {
     }
     
     log("\nFLN guerrilla redeploymnet")
+    log(separator())
     
     if (capabilityInPlay(CapXWilayaCoord)) {
       log(s"Guerrillas can redeploy across Wilaya borders: $CapXWilayaCoord")
