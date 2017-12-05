@@ -808,10 +808,11 @@ object ColonialTwilight {
     def statusSummary: Seq[String] = {
       val (gov, fln) = (govScore, flnScore)
       val b = new ListBuffer[String]
-      val cardsPlayed = if (currentCard.nonEmpty) turn else turn - 1
-      val cardPile = ((cardsPlayed max 1) + 12) / 13
-      val propInCurrentPile = cardPile == propCardsPlayed
-      val propCardProbability = if (propInCurrentPile) 0.0 else 1.0/(cardPile * 13 - cardsPlayed)
+      
+      val cardsPlayed         = if (currentCard.nonEmpty) turn else turn - 1
+      val nextCardsPile       = (cardsPlayed / 13) + 1
+      val propCardOutstanding = propCardsPlayed < nextCardsPile
+      val propCardProbability = if (propCardOutstanding) 1.0/(nextCardsPile * 13 - cardsPlayed) else 0.0
       b += "Status"
       b += separator()
       b += f"Gov resources    : ${resources(Gov)}%2d"
@@ -827,7 +828,7 @@ object ColonialTwilight {
       b += f"Border zone track: ${borderZoneTrack}%d"
       b += separator()
       b += s"Campaign         : ${ordinal(propCardsPlayed+1)}${if (propCardsPlayed == numberOfPropCards - 1) " -- Final campaign" else ""}"
-      b += f"Prop card next   : $propCardProbability%.5f"
+      b += f"Prop card chance : $propCardProbability%.5f"
       b.toList
     }
     
@@ -1078,8 +1079,8 @@ object ColonialTwilight {
       case (s, n)       => throw new IllegalStateException(s"Cannot increase support from $s by $n steps")
     }
     val updated = sp.copy(support = newLevel)
-    logSupportChange(sp, updated)
     game = game.updateSpace(updated)
+    logSupportChange(sp, updated)
   }
   
   def decreaseSupport(name: String, num: Int): Unit = if (num > 0) {
@@ -1091,8 +1092,8 @@ object ColonialTwilight {
       case (s, n)       => throw new IllegalStateException(s"Cannot decrease support from $s by $n steps")
     }
     val updated = sp.copy(support = newLevel)
-    logSupportChange(sp, updated)
     game = game.updateSpace(updated)
+    logSupportChange(sp, updated)
   }
   
   
@@ -1427,7 +1428,7 @@ object ColonialTwilight {
             nextType(placed, remainingTypes.tail)
           }
           else {
-            val num = askInt(s"\nHow many $pieceType? ", 0, maxOfType)
+            val num = askInt(s"\nPlace how many $pieceType? ", 0, maxOfType)
             val numAvail = game.availablePieces.numOf(pieceType)
             val finalNum = if (num <= numAvail)
                num
@@ -1461,7 +1462,6 @@ object ColonialTwilight {
     val candidateNames = spaceNames(game.spaces filterNot (sp => prohibitedSpaces(sp.name)) filter (_.numOf(pieceType) > 0))
     def availPieces(names: List[String]) = names.foldLeft(0)((sum, n) => sum + game.getSpace(n).numOf(pieceType))
     assert(availPieces(candidateNames) >= num, "voluntaryRemoval: Not enough pieces on map!")
-    println(s"\nRemove ${amtPiece(num, pieceType)} from the map.")
     
     def nextSpace(removed: Vector[(String, Int)], candidates: List[String]): Vector[(String, Int)] = {
       val removedSoFar = removed.foldLeft(0) { case (sum, (_, n)) => sum + n }
@@ -2252,20 +2252,20 @@ object ColonialTwilight {
   }
   
   def resolvePropagandaCard(): Unit = {
+    val finalPropRound = game.propCardsPlayed == game.numberOfPropCards
     def logGameOver(): Unit = {
       // FLN wins ties
-      val finalPropRound = game.propCardsPlayed == game.numberOfPropCards
       val winner = if (!finalPropRound || game.flnMargin >= game.govMargin) Fln else Gov
       val totalSupport = game.totalOnMap(_.supportValue)
       val totalOppose  = game.totalOnMap(_.opposeValue)
       val flnBases     = game.totalOnMap(_.flnBases)
-      
-      
       log()
+      log(separator(char = '='))
       if (finalPropRound)
         log("Final Propaganda card")
       else
         log(s"$Fln has achieved its victory margin")
+      log(separator(char = '='))
       log(s"\nGame over: $winner wins!")
       log(separator())
       log(f"Government score: ${game.govMargin}%+3d  (support   : $totalSupport%2d, commitment: ${game.commitment}%2d)")
@@ -2278,10 +2278,10 @@ object ColonialTwilight {
     
     if (game.isConsequtivePropCard) {
       log("\nConsequtive Propagand cards.  Propaganda round skipped.")
-      if (game.propCardsPlayed == game.numberOfPropCards)
+      if (finalPropRound)
         logGameOver()
     }
-    else if ((game.propCardsPlayed > 1 && game.flnMargin > 0) || game.propCardsPlayed == game.numberOfPropCards) {
+    else if ((game.propCardsPlayed > 1 && game.flnMargin > 0)) {
       log("\nVictory Phase")
       log(separator())
       logGameOver()
@@ -2336,46 +2336,51 @@ object ColonialTwilight {
         decreaseCommitment(franceEntry.commit)
       }
       
-      log("\nSupport Phase")
-      log(separator())
-      Human.propSupportPhase()
-      Bot.propAgitatePhase()
+      // Game ends after commitiment adjustment in the final prop round
+      if (finalPropRound)
+        logGameOver()
+      else {
+        log("\nSupport Phase")
+        log(separator())
+        Human.propSupportPhase()
+        Bot.propAgitatePhase()
       
-      log("\nRedeploy Phase")
-      log(separator())
-      // Don't adjust control until both sides have finished redeploy!!!
-      val preRedeployState = game
-      Human.propRedeployPhase(preRedeployState)
-      Bot.propRedeployPhase()
-      // Now log all of the changes in control.
-      for (sp <- preRedeployState.spaces; updated = game.getSpace(sp.name))
-        logControlChange(sp, updated)
+        log("\nRedeploy Phase")
+        log(separator())
+        // Don't adjust control until both sides have finished redeploy!!!
+        val preRedeployState = game
+        Human.propRedeployPhase(preRedeployState)
+        Bot.propRedeployPhase()
+        // Now log all of the changes in control.
+        for (sp <- preRedeployState.spaces; updated = game.getSpace(sp.name))
+          logControlChange(sp, updated)
       
-      log("\nReset Phase")
-      log(separator())
-      val govCasualtiesOop = (game.casualties.frenchCubes + game.casualties.govBases) / 3
-      val flnCasualtiesOop = game.casualties.hiddenGuerrillas / 3
+        log("\nReset Phase")
+        log(separator())
+        val govCasualtiesOop = (game.casualties.frenchCubes + game.casualties.govBases) / 3
+        val flnCasualtiesOop = game.casualties.hiddenGuerrillas / 3
 
-      val govPieces = askPieces(game.casualties, govCasualtiesOop, FRENCH_PIECES, allowAbort = false,
-          heading = Some(s"\nYou must move ${amountOf(govCasualtiesOop, "French piece")} from casualties to Out of Play"))
-      movePiecesFromCasualtiesToOutOfPlay(govPieces)
-      movePiecesFromCasualtiesToAvailable(game.casualties.only(GOV_PIECES))
+        val govPieces = askPieces(game.casualties, govCasualtiesOop, FRENCH_PIECES, allowAbort = false,
+            heading = Some(s"\nYou must move ${amountOf(govCasualtiesOop, "French piece")} from casualties to Out of Play"))
+        movePiecesFromCasualtiesToOutOfPlay(govPieces)
+        movePiecesFromCasualtiesToAvailable(game.casualties.only(GOV_PIECES))
       
-      movePiecesFromCasualtiesToOutOfPlay(Pieces(hiddenGuerrillas = flnCasualtiesOop))
-      movePiecesFromCasualtiesToAvailable(game.casualties.only(HiddenGuerrillas))
+        movePiecesFromCasualtiesToOutOfPlay(Pieces(hiddenGuerrillas = flnCasualtiesOop))
+        movePiecesFromCasualtiesToAvailable(game.casualties.only(HiddenGuerrillas))
         
-      if (game.franceTrack > 0)
-        decreaseFranceTrack(1)
-      if (game.borderZoneTrack > 0)
-        decreaseBorderZoneTrack(1)
-      for (sp <- game.algerianSpaces filter (_.terror > 0))
-        removeTerror(sp.name, 1)
-      for (sp <- game.spaces filter (_.activeGuerrillas > 0))
-        hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
+        if (game.franceTrack > 0)
+          decreaseFranceTrack(1)
+        if (game.borderZoneTrack > 0)
+          decreaseBorderZoneTrack(1)
+        for (sp <- game.algerianSpaces filter (_.terror > 0))
+          removeTerror(sp.name, 1)
+        for (sp <- game.spaces filter (_.activeGuerrillas > 0))
+          hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
         
-      for (m <- game.momentum)
-        log(s"Discard momentum card: $m")
-      game = game.copy(momentum = Nil)
+        for (m <- game.momentum)
+          log(s"Discard momentum card: $m")
+        game = game.copy(momentum = Nil)
+      }
     }
   }
 

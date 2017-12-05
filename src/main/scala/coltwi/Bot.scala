@@ -75,9 +75,9 @@ object Bot {
   val onlyIn = (sp: Space) => turnState.onlyIn.isEmpty || turnState.onlyIn(sp.name)
 
   // Does space have a guerrilla that can be flipped without exposing any bases?
-  def hasSafeHiddenGuerrilla(sp: Space) = 
-    ((sp.flnBases == 0 || sp.isCountry) && sp.hiddenGuerrillas > 0) ||
-    (sp.flnBases > 0 && sp.hiddenGuerrillas > 1)
+  def hasSafeHiddenGuerrillas(sp: Space, num: Int) =
+    ((sp.flnBases == 0 || sp.isCountry) && sp.hiddenGuerrillas >= num) ||
+    (sp.flnBases > 0 && sp.hiddenGuerrillas > num)
 
   def tryOperations[T](code: => T): (GameState, TurnState, T) = {
     val savedGameState = game
@@ -294,9 +294,12 @@ object Bot {
       ExecOpOnly
   }
   
-  def terrorCandidates = game.algerianSpaces filter { sp =>
-    sp.population > 0 &&
-    hasSafeHiddenGuerrilla(sp) && 
+  def hiddenNeeded(sp: Space) = if (capabilityInPlay(CapAmateurBomber) && sp.isCity) 2 else 1
+    
+  def terrorCandidates(offLimits: Set[String]) = game.algerianSpaces filter { sp =>
+    !offLimits(sp.name) &&
+    sp.population > 0   &&
+    hasSafeHiddenGuerrillas(sp, hiddenNeeded(sp)) && 
     ((sp.isSupport && !momentumInPlay(MoIntimidation)) || 
      (game.isFinalCampaign && sp.isNeutral && sp.terror == 0 && sp.canTrain))
   }  
@@ -490,7 +493,7 @@ object Bot {
         (eventIsEffective(game, eventState) && (card.markedForFLN || dieRoll < 5))
       }
       
-      val terrorResult = if (terrorCandidates.isEmpty)
+      val terrorResult = if (terrorCandidates(Set.empty).isEmpty)
         None
       else
         Some(tryOperations { doTerror() })
@@ -532,44 +535,44 @@ object Bot {
     new HighestPriority[Space]("Highest population",                      _.population))
   
   def doTerror(): Action = {
-    def nextTerror(candidates: List[Space], num: Int): Int = {
-      if (candidates.isEmpty || (num == 1 && turnState.limOpOnly))
-        num
-      else {
+    var terrorized = Set.empty[String]
+    def nextTerror(): Unit = {
+      val candidates = terrorCandidates(terrorized)
+      if (candidates.nonEmpty && (terrorized.isEmpty || !turnState.limOpOnly)) {
         val target = topPriority(candidates, TerrorPriorities)
         val isFree = turnState.freeOperation || (target.isCity && capabilityInPlay(CapEffectiveBomber))
         
-        if (!isFree && game.resources(Fln) == 0)
-          tryExtort()
+        if (!isFree && game.resources(Fln) == 0) {
+          val protectedGs = List((target.name -> hiddenNeeded(target)))
+          tryExtort(protectedGs)
+        }
       
         // If the bot is still broke then we are done
-        if (!isFree && game.resources(Fln) == 0)
-           num
-        else {
-          val target = topPriority(candidates, TerrorPriorities)
+        if (isFree || game.resources(Fln) > 0) {
+          terrorized += target.name
           log()
           log(s"$Fln executes Terror operation: ${target.name}")
           if (isFree)
             log(s"Terror is free in city because '${CapEffectiveBomber}' is in play")
           else
             decreaseResources(Fln, 1)
-          activateHiddenGuerrillas(target.name, 1)
+          activateHiddenGuerrillas(target.name, hiddenNeeded(target))
           if (target.terror == 0 && game.terrorMarkersAvailable > 0)
             addTerror(target.name, 1)
           if (!momentumInPlay(MoIntimidation))
             setSupport(target.name, Neutral)
         
-          nextTerror(candidates filterNot (_.name == target.name), num + 1)
+          nextTerror()
         }
       }
     }
     
     log()
     log(s"$Fln chooses: Terror")
-    val numSpaces = nextTerror(terrorCandidates, 0)
+    val numSpaces = nextTerror()
     trySubvert()
     tryExtort()
-    effectiveAction(numSpaces)
+    effectiveAction(terrorized.size)
   }
 
   object ConsiderAttack extends ActionFlowchartNode {
@@ -658,7 +661,7 @@ object Bot {
     def execute(): Either[ActionFlowchartNode, Action] = {
       val hasGov          = (sp: Space) => sp.totalCubes > 0 || sp.govBases > 0
       val noAmbush        = (sp: Space) => sp.flnBases == 0 && sp.totalGuerrillas >= 6 && hasGov(sp)
-      val withAmbush      = (sp: Space) => hasSafeHiddenGuerrilla(sp) && hasGov(sp)
+      val withAmbush      = (sp: Space) => hasSafeHiddenGuerrillas(sp, 1) && hasGov(sp)
       val with4Guerrillas = (sp: Space) => sp.flnBases == 0 && sp.totalGuerrillas >= 4 && hasGov(sp)
       
       // Do we have at least one space where we can guaranteee success without ambush
