@@ -31,7 +31,6 @@ import java.io.IOException
 import scala.util.Random.{shuffle, nextInt}
 import scala.annotation.tailrec
 import scala.util.Properties.{lineSeparator, isWin}
-import scala.collection.immutable.ListMap
 import scala.collection.mutable.ListBuffer
 import scala.io.StdIn.readLine
 import ColonialTwilight._
@@ -587,7 +586,7 @@ object Human {
                        else List(FrenchTroops, FrenchPolice, GovBases)
       game.availablePieces.only(pieceTypes)
     }
-    def getMoveCandidates     = spaceNames(game.algerianSpaces filter moveFilter).toSet
+    def getMoveCandidates     = spaceNames(game.algerianSpaces filter moveFilter).sorted
     def getResettleCandidates = if (game.pivotalCardsPlayed(PivotalMobilization))
       spaceNames(game.algerianSpaces filter resettleFilter).toSet
     else
@@ -629,60 +628,58 @@ object Human {
     //            Move up to 6 French troops, police, bases among 
     //            the selected spaces and the available box
     def moveFrenchPieces(params: Params): Unit = {
-      def selectSpaces(selected: List[String], candidates: Set[String]): List[String] = {
-        if (selected.size == 3 || candidates.isEmpty)
-          selected
-        else {
-          val choices = List(
-            choice(true,              "select", "Select an Algerian space for deployment"),
-            choice(selected.nonEmpty, "done",   "Finish selecting spaces for deployment"),
-            choice(true,              "abort",  "Abort the Deploy special activity")).flatten
-          
-          println()
-          println(s"${amountOf(selected.size, "deploy space")} selected: ${andList(selected.toList.sorted)}")
-          println("Choose one:")
-          askMenu(choices).head match {
-            case "select" => 
-              val s = askCandidate("Select space: ", candidates.toList.sorted, allowAbort = false)
-              selectSpaces(s :: selected, candidates - s)
-            case "done"   => selected
-            case "abort"  => if (askYorN("Really abort? (y/n) ")) throw AbortAction else selectSpaces(selected, candidates)
-          }
-        }
+      val AB = "AVAILABLE"
+      var deploySpaces: Map[String, Pieces] = Map(AB -> Pieces()).withDefaultValue(Pieces())
+      def deploySpaceNames = deploySpaces.keys.toList.sorted
+      def numMoved = (deploySpaces.toList map (_._2.total)).sum
+      def movable(name: String): Pieces = name match {
+        case AB => game.availablePieces.only(FRENCH_PIECES) - deploySpaces(AB)
+        case _  => game.getSpace(name).pieces.only(FRENCH_PIECES) - deploySpaces(name)
       }
       
-      val FrenchPieces = List(FrenchTroops, FrenchPolice, GovBases)
-      val FrenchCubes  = List(FrenchTroops, FrenchPolice)
-      val AB = "AVAILABLE"
-      val deploySpaces = AB :: selectSpaces(Nil, getMoveCandidates).reverse
-      var deployed: Map[String, Pieces] = Map.empty.withDefaultValue(Pieces())
-      def numDeployed = deployed.foldLeft(0) { case (sum, (_, p)) => sum + p.total }
-      println()
-      for {
-        src <- deploySpaces
-        if askYorN(s"Deploy pieces out of $src (y/n) ")
-        dest <- deploySpaces filterNot (_ == src)
-      } {
-        val validTypes = if (dest == AB || game.getSpace(dest).canTakeBase) FrenchPieces else FrenchCubes
-        val srcPieces = if (src == AB) availPieces.only(validTypes) 
-                        else           game.getSpace(src).only(validTypes) - deployed(src)
-        if (srcPieces.total > 0 && numDeployed < 6) {
-          val num = askInt(s"Deploy how many pieces from $src to $dest", 0, srcPieces.total min (6 - numDeployed))
-          if (num > 0) {
-            val pieces = askPieces(srcPieces, num)
-            (src, dest) match {
-              case (AB, _) =>
-                placePieces(dest, pieces)
-                deployed += dest -> (deployed(dest) + pieces)
-              case (_, AB) =>
-                removeToAvailable(src, pieces)
-              case (_,  _) =>
-                movePieces(pieces, src, dest)
-                deployed += dest -> (deployed(dest) + pieces)
+      def nextAction(): Unit = {
+        val spaceChoice = if (deploySpaces.size < 4) List("space" -> "Select a map space for deployment") else Nil
+        val deployChoices = if (deploySpaces.size > 1 && numMoved < 6)
+          for (name <- deploySpaceNames; if movable(name).total > 0)
+            yield (name -> s"Deploy pieces out of $name  (${movable(name)})")
+        else
+          Nil
+        
+        val choices = spaceChoice ::: deployChoices ::: List(
+          "done"  -> "Finished with the Deploy special activity",
+          "abort" -> "Abort the Deploy special activity")
+          
+        println()
+        println(s"${amountOf(numMoved, "piece")} moved so far")
+        askMenu(choices).head match {
+          case "space" =>
+            val name = askCandidate("Select deployment space: ", getMoveCandidates)
+            deploySpaces += name -> Pieces()
+            nextAction()
+          case "done" =>
+          case "abort" =>
+            if (askYorN("Really abort? (y/n) "))
+              throw AbortAction
+            else
+              nextAction()
+          case src =>
+            val candidates = deploySpaceNames filterNot (_ == src)
+            val dest = if (candidates.size == 1) candidates.head else askCandidate("Select destination: ", candidates)
+            val srcPieces = movable(src)
+            val num  = askInt(s"Deploy how many pieces from $src to $dest", 0, srcPieces.total min (6 - numMoved))
+            if (num > 0) {
+              val pieces = askPieces(srcPieces, num)
+              (src, dest) match {
+                case (AB, _) => placePieces(dest, pieces)
+                case (_, AB) => removeToAvailable(src, pieces)
+                case (_,  _) => movePieces(pieces, src, dest)
+              }
+              deploySpaces += dest -> (deploySpaces(dest) + pieces)
             }
-          }
+            nextAction()
         }
       }
+      nextAction()
     }
     
     // Resettle - Choose one space and place a resettled marker there

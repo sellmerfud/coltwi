@@ -31,7 +31,6 @@ import java.io.IOException
 import scala.util.Random.{shuffle, nextInt}
 import scala.annotation.tailrec
 import scala.util.Properties.{lineSeparator, isWin}
-import scala.collection.immutable.ListMap
 import scala.collection.mutable.ListBuffer
 import scala.io.StdIn.readLine
 import ColonialTwilight._
