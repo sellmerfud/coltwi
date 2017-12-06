@@ -493,7 +493,7 @@ object ColonialTwilight {
     
     // As per the Errata, border sectors do not come into play until
     // Morocco and Tunisia become independent.
-    def isBorderSector = (game.pivotalCardsPlayed(PivotalMoroccoTunisiaIndepdent)) &&
+    def isBorderSector = game.moroccoTunisiaIndependent &&
                          (areAdjacent(name, Morocco) || areAdjacent(name, Tunisia))
     
     def population = if (isResettled) 0
@@ -815,11 +815,11 @@ object ColonialTwilight {
       val propCardProbability = if (propCardOutstanding) 1.0/(nextCardsPile * 13 - cardsPlayed) else 0.0
       b += "Status"
       b += separator()
-      b += f"Gov resources    : ${resources(Gov)}%2d"
-      b += f"FLN resources    : ${resources(Fln)}%2d"
-      b += separator()
       b += f"Support + Commit : ${gov}%2d (${govMargin}%+d)"
       b += f"Oppose  + Bases  : ${fln}%2d (${flnMargin}%+d)"
+      b += separator()
+      b += f"Gov resources    : ${resources(Gov)}%2d"
+      b += f"FLN resources    : ${resources(Fln)}%2d"
       b += separator()
       b += f"Gov commitment   : ${commitment}%2d"
       b += f"Resettled sectors: ${resettledSectors}%2d"
@@ -1784,7 +1784,9 @@ object ColonialTwilight {
   
   
   val scenarios = ListMap[String, Scenario](
-    "Short" -> new Short
+    "Short"  -> new Short,
+    "Medium" -> new Medium,
+    "Full"   -> new Full
   )
   val scenarioChoices = scenarios.toList map { case (key, scenario) => key -> scenario.name }
   

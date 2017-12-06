@@ -31,98 +31,94 @@ package coltwi.scenarios
 
 import coltwi.ColonialTwilight._
 
-class Short extends Scenario {
-  val name               = "Short: 1960-1962: The End Game"
-  val numberOfPropCards  = 3
-  val resources          = Resources(gov = 20, fln = 15)
-  val commitment         = 15
-  val franceTrack        = franceTrackFromLetter('E')
-  val borderZoneTrack    = 3
-  val outOfPlay          = Pieces(hiddenGuerrillas = 5)
-  val pivotalCardsPlayed = Set(PivotalMobilization, PivotalRecallDeGaulle, PivotalMoroccoTunisiaIndepdent)
+class Medium extends Scenario {
+  val name               = "Medium: 1957-1962: Midgame Development"
+  val numberOfPropCards  = 4
+  val resources          = Resources(gov = 24, fln = 15)
+  val commitment         = 20
+  val franceTrack        = franceTrackFromLetter('C')
+  val borderZoneTrack    = 2
+  val outOfPlay          = Pieces(hiddenGuerrillas = 2)
+  val pivotalCardsPlayed = Set(PivotalMobilization, PivotalMoroccoTunisiaIndepdent)
 
   val spaces = List(
     // Wilaya I
     DefaultBarika.copy(
       support = Oppose, 
-      pieces  = Pieces(algerianPolice = 1, hiddenGuerrillas = 1)),
-    DefaultBatna,
+      pieces  = Pieces(hiddenGuerrillas = 2, flnBases = 1)),
+    DefaultBatna.copy(
+      pieces = Pieces(hiddenGuerrillas = 1)),
     DefaultBiskra.copy(
       pieces  = Pieces(frenchPolice = 1)),
-    DefaultOumElBouaghi,
+    DefaultOumElBouaghi.copy(
+      pieces = Pieces(hiddenGuerrillas = 1)),
     DefaultTebessa.copy(
-      support = Oppose,
-      pieces  = Pieces(algerianPolice = 1, hiddenGuerrillas = 1)),
+      pieces  = Pieces(frenchPolice = 1)),
     DefaultNegrine.copy(
       pieces  = Pieces(frenchPolice = 1)),
       
     // Wilaya II
     DefaultConstantine.copy(
       support = Support,
-      pieces  = Pieces(frenchPolice = 1)),
+      pieces  = Pieces(frenchPolice = 2)),
     DefaultSetif.copy(
-      pieces  = Pieces(hiddenGuerrillas = 1),
-      markers = List(ResettledMarker)),
+      pieces  = Pieces(algerianPolice = 1, hiddenGuerrillas = 1)),
     DefaultPhilippeville.copy(
-      pieces  = Pieces(frenchTroops = 4, algerianPolice = 1, govBases = 1)),
-    DefaultSoukAhras.copy(
       support = Oppose,
-      pieces  = Pieces(frenchTroops = 1, algerianPolice = 1, govBases = 1,
-                       hiddenGuerrillas = 1, flnBases = 1)),
+      pieces  = Pieces(frenchPolice = 1, algerianPolice = 1, hiddenGuerrillas = 2, flnBases = 1)),
+    DefaultSoukAhras.copy(
+      pieces  = Pieces(frenchTroops = 4, algerianTroops = 1, frenchPolice = 2, govBases = 1,
+                       hiddenGuerrillas = 1)),
                        
     // Wilaya III
     DefaultTiziOuzou.copy(
       support = Oppose,
-      pieces  = Pieces(frenchPolice = 1, hiddenGuerrillas = 1, flnBases = 1)),
-    DefaultBordjBouArreridj.copy(
-      pieces  = Pieces(frenchPolice = 1),
-      markers = List(ResettledMarker)),
+      pieces  = Pieces(frenchPolice = 1, hiddenGuerrillas = 2, flnBases = 1)),
+    DefaultBordjBouArreridj,
     DefaultBougie.copy(
       support = Oppose,
-      pieces  = Pieces(frenchPolice = 1, hiddenGuerrillas = 1, flnBases = 1)),
+      pieces  = Pieces(frenchPolice = 1, algerianPolice = 1, hiddenGuerrillas = 2, flnBases = 1)),
       
-    // Wilaya IV  
+    // Wilaya IV
     DefaultAlgiers.copy(
       support = Support,
-      pieces  = Pieces(frenchTroops = 4, algerianTroops = 1, frenchPolice = 1)),
+      pieces  = Pieces(frenchTroops = 5, algerianTroops = 1, frenchPolice = 2, algerianPolice = 1)),
     DefaultMedea.copy(
-      pieces  = Pieces(algerianTroops = 1, govBases = 1)),
+      pieces  = Pieces(algerianPolice = 1, govBases = 1, hiddenGuerrillas = 1)),
     DefaultOrleansVille.copy(
       support = Oppose,
       pieces  = Pieces(frenchPolice = 1, algerianPolice = 1, hiddenGuerrillas = 1, flnBases = 1)),
       
-    // Wilaya V  
+    // Wilaya V
     DefaultOran.copy(
       support = Support,
-      pieces  = Pieces(algerianTroops = 1, algerianPolice = 1, frenchPolice = 1)),
+      pieces  = Pieces(algerianTroops = 1, frenchPolice = 2)),
     DefaultMecheria.copy(
       pieces  = Pieces(frenchPolice = 1, algerianPolice = 1)),
     DefaultTlemcen.copy(
-      pieces  = Pieces(frenchPolice = 2, hiddenGuerrillas = 1),
+      pieces  = Pieces(frenchPolice = 2),
       markers = List(ResettledMarker)),
     DefaultSidiBelAbbes.copy(
       pieces  = Pieces(frenchPolice = 1, govBases = 1)),
-    DefaultMostaganem.copy(
-      pieces  = Pieces(frenchPolice = 1)),
-    DefaultSaida,
-    DefaultMascara.copy(
-      pieces  = Pieces(frenchPolice = 1)),
-    DefaultTiaret.copy(
-      pieces  = Pieces(frenchPolice = 1)),
+    DefaultMostaganem,
+    DefaultSaida.copy(
+      pieces  = Pieces(hiddenGuerrillas = 1, flnBases = 1)),
+    DefaultMascara,
+    DefaultTiaret,
     DefaultAinSefra.copy(
       pieces  = Pieces(frenchPolice = 1)),
     DefaultLaghouat,
     
     // Wilaya VI
-    DefaultSidiAissa,
-    DefaultAinOussera.copy(
-      support = Oppose),
-      
-    // Countries  
+    DefaultSidiAissa.copy(
+      pieces  = Pieces(hiddenGuerrillas = 1, flnBases = 1)),
+    DefaultAinOussera,
+
+    // Countries
     DefaultMorocco.copy(
-      pieces  = Pieces(hiddenGuerrillas = 4, flnBases = 2)),
+      pieces  = Pieces(hiddenGuerrillas = 2, flnBases = 1)),
     DefaultTunisia.copy(
-      pieces  = Pieces(hiddenGuerrillas = 5, flnBases = 2))
+      pieces  = Pieces(hiddenGuerrillas = 4, flnBases = 2))
   )
 }
 

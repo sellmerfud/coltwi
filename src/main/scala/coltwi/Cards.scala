@@ -1824,7 +1824,7 @@ object Cards {
         // Each Resource Phase: Gov’t Resources increased only by Commitment;
         // French Casualties do not affect Commitment. This card remains in effect
         // for the rest of the game unless cancelled by CouP D’etat Pivotal Event.
-        log("Recall De Gaulle is not in effect.")
+        log("Recall De Gaulle is now in effect.")
         
       },
       (role: Role) => () // Single event
