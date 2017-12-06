@@ -1460,9 +1460,9 @@ object Bot {
     
     def wouldActivate(numGuerrillas: Int, fromName: String, toName: String): Boolean = {
       val (from, to) = (game.getSpace(fromName), game.getSpace(toName))
-      // If Population Control in effect, moving into a city with 2+ cubes activates
+      // If Population Control in effect, moving into a city with 3+ cubes activates
       // regarless of the size of the moving party.
-      if (momentumInPlay(MoPopulationControl) && to.isCity && to.totalCubes > 1)
+      if (momentumInPlay(MoPopulationControl) && to.isCity && to.totalCubes > 2)
         true
       // If crossing an international border then the Border Zone track
       // is added to the number of cubes in the destination
@@ -1676,6 +1676,7 @@ object Bot {
       new LowestPriority[Source]("Least movers",            _.canMove),
       new LowestPriority[Source]("Least cubes",             _.sp.totalCubes))
       
+    var redeployed = false
     val EmptyRelos: Map[String, Map[String, Int]] = Map.empty.withDefaultValue(Map.empty.withDefaultValue(0))
     def redeployGuerrillas(sources: List[Source], dests: List[Dest], 
                           redeployments: Map[String, Map[String, Int]] = EmptyRelos): Unit = {
@@ -1690,6 +1691,7 @@ object Bot {
           val a = num min sp.activeGuerrillas
           val h = (num - a) min sp.hiddenGuerrillas
           redeployPieces(Pieces(hiddenGuerrillas = h, activeGuerrillas = a), srcName, destName)
+          redeployed = true
         }
       }
       else {
@@ -1718,7 +1720,8 @@ object Bot {
     else
       for (wilaya <- ALL_WILAYAS)
         redeployGuerrillas(getSources(game.wilayaSpaces(wilaya)), getDests(game.wilayaSpaces(wilaya)))
-  
+    if (!redeployed)
+      log("No FLN guerrilla redeployment")
   }
 }
   

@@ -707,62 +707,48 @@ object Human {
         false
       }
       else {
-        def selectSpaces(selected: List[String]): List[String] = {
-          val candidates = spaceNames(game.algerianSpaces)
-          if (selected.size == maxSpaces)
-            selected
-          else {
-            val choices = List(
-              choice(true,              "select", "Select a Troop Lift space"),
-              choice(selected.size > 1, "done",   "Finished selecting Troop Lift spaces"),
-              choice(true,              "abort",  "Abort the Troop Lift special activity")).flatten
+        def liftTroops(selectedSpaces: List[String]): Unit = {
+          val spaceChoice = if (selectedSpaces.size < maxSpaces) List("space" -> "Select a Troop Lift space") else Nil
+          val liftChoices = if (selectedSpaces.size > 1)
+            (selectedSpaces.sorted filter (name => game.getSpace(name).frenchTroops > 0) 
+                                   map    (name => name -> s"Lift French troops out of $name"))
+          else
+            Nil
+          val choices = spaceChoice ::: liftChoices ::: List(
+            "done"  -> "Finished with Troop Lift activity",
+            "abort" -> "Abort the Troop Lift special activity")
             
-            println()
-            println(s"Troop Lift spaces selected (${selected.size} of ${maxSpaces}):")
-            wrap("  ", selected) foreach println
-            println("Choose one:")
-            askMenu(choices).head match {
-              case "select" => 
-                val name = askCandidate("Select space: ", candidates.toList.sorted)
-                selectSpaces(name :: selected)
-              case "done"   => selected
-              case "abort"  => if (askYorN("Really abort? (y/n) ")) throw AbortAction else selectSpaces(selected)
-            }
-          }
-        }
-        
-        def liftTroops(src: String, dst: String): Unit = {
-          val (srcSpace, dstSpace) = (game.getSpace(src), game.getSpace(dst))
-          if (srcSpace.totalTroops > 0) {
-            askInt(s"Lift how many French troops from $src to $dst", 0, srcSpace.frenchTroops) match {
-              case 0   =>
-              case num => 
-                val (pieces, swept) = askFrenchTroops(srcSpace, movingGroups(src), num)
-                movePieces(pieces, src, dst)
-                movingGroups.remove(src, swept)
-                movingGroups.add(dst, swept)
-            }
+          println("\nChoose one:")
+          askMenu(choices).head match {
+            case "done" =>
+            case "abort" =>
+              if (askYorN("Really abort? (y/n) ")) throw AbortAction
+              else liftTroops(selectedSpaces)
+            case "space" =>
+              val candidates = spaceNames(game.algerianSpaces) filterNot selectedSpaces.contains
+              val name = askCandidate("Select Troop Lift space: ", candidates.sorted)
+              liftTroops(name :: selectedSpaces)
+              
+            case src =>
+              val dest = askCandidate("\nSelect destination for French troops: ", selectedSpaces.sorted filterNot (_ == src))
+              val srcSpace = game.getSpace(src)
+              askInt(s"Lift how many French troops from $src to $dest", 0, srcSpace.frenchTroops) match {
+                case 0   =>
+                case num => 
+                  val (pieces, swept) = askFrenchTroops(srcSpace, movingGroups(src), num)
+                  movePieces(pieces, src, dest)
+                  movingGroups.remove(src, swept)
+                  movingGroups.add(dest, swept)
+              }
+              liftTroops(selectedSpaces)
           }
         }
         
         log()
         log(s"$Gov executes a Troop Lift special ability")
         log(s"May select up to ${maxSpaces} spaces")
-        
-        val selectedSpaces = selectSpaces(Nil).reverse
-        val withTroops = selectedSpaces filter (name => game.getSpace(name).frenchTroops > 0)
-        
-        if (withTroops.isEmpty) {
-          println()
-          println("\nNone of the selected spaces contains contains French troops!")
-          pause()
-          false
-        }
-        else {
-          for (sourceName <- withTroops; destName <- selectedSpaces filterNot (_ == sourceName))
-            liftTroops(sourceName, destName)
-          true  
-        }
+        liftTroops(Nil)
+        true  
       }
     }
     
@@ -1057,7 +1043,7 @@ object Human {
     def redeployTroops(): Unit = {
       val sources = spaceNames(game.algerianSpaces filter (_.totalTroops > 0)).sorted
       val dests   = spaceNames(game.algerianSpaces filter (sp => sp.isCity || sp.govBases > 0))
-      
+      var redeployed = false
       if (sources.nonEmpty) {
         val choices = List("redeploy" -> "Choose troops to redeploy",
                            "done"     -> "Finished redeploying troops")
@@ -1070,6 +1056,7 @@ object Human {
               val src      = game.getSpace(srcName)
               val num      = askInt(s"Deploy how many troops out of $srcName", 0, src.totalTroops)
               val troops   = askPieces(src.pieces, num, TROOPS)
+              redeployed = true
               redeployPieces(troops, srcName, destName)
             }
             catch {
@@ -1078,6 +1065,8 @@ object Human {
             redeployTroops()
         }
       }
+      if (!redeployed)
+        log("No troop redeployment")
     }
     
     def redeployPolice(): Unit = {
@@ -1085,6 +1074,7 @@ object Human {
       // not done until all redeployment (both sides) is done.
       val sources = spaceNames(game.algerianSpaces filter (_.totalPolice > 0)).sorted
       val dests   = spaceNames(preRedeployState.algerianSpaces filter (_.isGovControlled))
+      var redeployed = false
       
       val onlyOneSpace = (sources.size == 1 && dests.size == 1 && sources.head == dests.head)
       if (sources.nonEmpty && dests.nonEmpty && !onlyOneSpace) {
@@ -1099,6 +1089,7 @@ object Human {
               val src      = game.getSpace(srcName)
               val num      = askInt(s"Deploy how many police out of $srcName", 0, src.totalPolice)
               val police   = askPieces(src.pieces, num, POLICE)
+              redeployed = true
               redeployPieces(police, srcName, destName)
             }
             catch {
@@ -1107,6 +1098,8 @@ object Human {
             redeployPolice()
         }
       }
+      if (!redeployed)
+        log("No police redeploymnet")
     }
     
     log("\nGovernment troop redeploymnet")
