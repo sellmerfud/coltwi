@@ -812,7 +812,11 @@ object ColonialTwilight {
       val cardsPlayed         = if (currentCard.nonEmpty) turn else turn - 1
       val nextCardsPile       = (cardsPlayed / 13) + 1
       val propCardOutstanding = propCardsPlayed < nextCardsPile
-      val propCardProbability = if (propCardOutstanding) 1.0/(nextCardsPile * 13 - cardsPlayed) else 0.0
+      val cardsRemaining      = nextCardsPile * 13 - cardsPlayed  // remaining in current campaign
+      val (propCardChance, propCardFraction) = if (propCardOutstanding)
+        (1.0/cardsRemaining, s"  (1/$cardsRemaining)")
+      else
+        (0.0, s"  (${amountOf(13 - cardsPlayed % 13, "safe card")})")
       b += "Status"
       b += separator()
       b += f"Support + Commit : ${gov}%2d (${govMargin}%+d)"
@@ -828,7 +832,7 @@ object ColonialTwilight {
       b += f"Border zone track: ${borderZoneTrack}%d"
       b += separator()
       b += s"Campaign         : ${ordinal(propCardsPlayed+1)}${if (propCardsPlayed == numberOfPropCards - 1) " -- Final campaign" else ""}"
-      b += f"Prop card chance : $propCardProbability%.5f"
+      b += f"Prop card chance : $propCardChance%.5f$propCardFraction"
       b.toList
     }
     

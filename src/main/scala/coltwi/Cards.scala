@@ -129,6 +129,7 @@ object Cards {
       () => NoEvent,
       (role: Role) => {
         // Aux armes citoyens: Free Train in up to 2 selectable spaces.
+        Human.specialActivity.init(false)
         Human.Train.execute(Human.Params(free = true, maxSpaces = Some(2)))
       },
       (role: Role) => ()
@@ -1117,7 +1118,8 @@ object Cards {
           new Bot.BooleanPriority[Space]("Support space",    _.isSupport),
           new Bot.BooleanPriority[Space]("Unprotected base", sp => sp.flnBases > 0 && (sp.hiddenGuerrillas == 0 || sp.totalGuerrillas < 2)),
           new Bot.BooleanPriority[Space]("Friendly pieces",  _.totalFln > 0),
-          new Bot.BooleanPriority[Space]("In Algeria",      !_.isCountry))
+          new Bot.BooleanPriority[Space]("In Algeria",      !_.isCountry),
+          new Bot.HighestPriority[Space]("Highest population", _.population))
         val sp = Bot.topPriority(game.spaces, priorities)
         if (game.outOfPlay.hiddenGuerrillas > 0)
           placePiecesFromOutOfPlay(sp.name, Pieces(hiddenGuerrillas = 1))
@@ -1133,6 +1135,7 @@ object Cards {
       () => NoEvent,  // Bot will never use this event
       (role: Role) => {
         // Expansion: Free Train in up to 2 selectable spaces.
+        Human.specialActivity.init(false)
         Human.Train.execute(Human.Params(free = true, maxSpaces = Some(2)))
       },
       (role: Role) => ()
@@ -1584,13 +1587,13 @@ object Cards {
           else
             askPieces(dest.pieces, 2, GUERRILLAS)
           val bases = Pieces(flnBases = (2 - guerrillas.total) min dest.flnBases)
+          // Note: There is no change in commitment if a base is removed.
           removeToAvailable(destName, guerrillas + bases)
         }
         else { // role == Fln
           val priorities = List(
             new Bot.LowestPriority[Space]("Fewest guerrillas", _.totalGuerrillas))
           val dest = Bot.topPriority(game.algerianSpaces filter op744, priorities)
-          val sources = game.algerianSpaces filter (_.frenchTroops > 0) sortBy (-_.frenchTroops)
           def moveTroops(remaining: Int, sources: List[Space]): Unit = (remaining, sources) match {
             case (0, _)   =>
             case (_, Nil) =>
@@ -1599,7 +1602,8 @@ object Cards {
               movePieces(Pieces(frenchTroops = num), x.name, dest.name)
               moveTroops(remaining - num, xs)
           }
-          
+          val sources = game.algerianSpaces filter (_.frenchTroops > 0) sortBy (-_.frenchTroops)
+          moveTroops(4, sources)
           val num = dest.totalGuerrillas min 2
           val active = num min dest.activeGuerrillas
           val guerrillas = Pieces(activeGuerrillas = active,

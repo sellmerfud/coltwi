@@ -288,6 +288,8 @@ object Human {
         }
         val moved = movingGroups.toList.sortBy(_._1) map { case (n, p) => s"$n ($p)"}
       
+        println()
+        wrap("Garrison spaces: ", garrisoned.toList.sorted) foreach println
         println(s"\nChoose one:  (${amountOf(totalMoved, "Police cube")} moved so far)")
         askMenu(choices, allowAbort = false).head match {
           case "space"  => 
@@ -396,7 +398,7 @@ object Human {
         println("\n")
         println(s"$Gov Sweep operation")
         println(separator(char = '='))
-        wrap("spaces swept: ", sweepSpaces.toList.sorted) foreach println
+        wrap("Spaces swept: ", sweepSpaces.toList.sorted) foreach println
         println(s"\nChoose one:")
         askMenu(choices, allowAbort = false).head match {
           case "sweep" =>
@@ -421,6 +423,8 @@ object Human {
       nextChoice()
       for (name <- sweepSpaces.toList.sorted)
         activateHiddenGuerrillas(name, guerrillasActivated(game.getSpace(name)))
+      if (specialActivity.allowed && askYorN("\nPerform a special activity? (y/n) "))
+        executeSpecialActivity(TroopLift::Neutralize::Nil, params)
       sweepSpaces.size
     }
     
@@ -1040,10 +1044,10 @@ object Human {
   // The Government player may move any Troops on the map to any Cities or spaces with friendly Bases.
   // Any Police on the map may move to any Government Controlled spaces.
   def propRedeployPhase(preRedeployState: GameState): Unit = {
+    var redeployed = false
     def redeployTroops(): Unit = {
       val sources = spaceNames(game.algerianSpaces filter (_.totalTroops > 0)).sorted
       val dests   = spaceNames(game.algerianSpaces filter (sp => sp.isCity || sp.govBases > 0))
-      var redeployed = false
       if (sources.nonEmpty) {
         val choices = List("redeploy" -> "Choose troops to redeploy",
                            "done"     -> "Finished redeploying troops")
@@ -1065,8 +1069,6 @@ object Human {
             redeployTroops()
         }
       }
-      if (!redeployed)
-        log("No troop redeployment")
     }
     
     def redeployPolice(): Unit = {
@@ -1074,7 +1076,6 @@ object Human {
       // not done until all redeployment (both sides) is done.
       val sources = spaceNames(game.algerianSpaces filter (_.totalPolice > 0)).sorted
       val dests   = spaceNames(preRedeployState.algerianSpaces filter (_.isGovControlled))
-      var redeployed = false
       
       val onlyOneSpace = (sources.size == 1 && dests.size == 1 && sources.head == dests.head)
       if (sources.nonEmpty && dests.nonEmpty && !onlyOneSpace) {
@@ -1098,13 +1099,17 @@ object Human {
             redeployPolice()
         }
       }
-      if (!redeployed)
-        log("No police redeploymnet")
     }
     
     log("\nGovernment troop redeploymnet")
+    redeployed = false
     redeployTroops()
+    if (!redeployed)
+      log("No troop redeployment")
     log("\nGovernment police redeploymnet")
+    redeployed = false
     redeployPolice()
+    if (!redeployed)
+      log("No police redeploymnet")
   }
 }
