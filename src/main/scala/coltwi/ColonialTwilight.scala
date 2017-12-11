@@ -2358,6 +2358,7 @@ object ColonialTwilight {
         Human.propRedeployPhase(preRedeployState)
         Bot.propRedeployPhase()
         // Now log all of the changes in control.
+        log()
         for (sp <- preRedeployState.spaces; updated = game.getSpace(sp.name))
           logControlChange(sp, updated)
       

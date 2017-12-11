@@ -852,11 +852,15 @@ object Bot {
           game.resources(Fln) > reservedResources
         }
       }
+      
+      def logRallyChoice(): Unit = {
+        if (numRallies == 0) {
+          log()
+          log(s"$Fln chooses: Rally")
+        }
+      }
         
       if (canPlaceBase || ((game.totalOnMap(_.flnBases) * 2) > (guerrillasWithBases + dieRoll/2))) {
-        log()
-        log(s"$Fln chooses: Rally")
-        
         def doRallies(candidates: List[String], rallyType: RallyType, priorities: SpacePriorities, 
                         force: Boolean = false, numRemaining: Int = 1000): Unit = {
           
@@ -866,6 +870,7 @@ object Bot {
             rallyType match {
               case PlaceBase if game.flnBasesAvailable == 0 =>
                 if (force && haveAResource()) {
+                  logRallyChoice()
                   log()
                   log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
                   if (!turnState.freeOperation)
@@ -874,6 +879,7 @@ object Bot {
                 }
               case PlaceBase =>
                 if (haveAResource()) {
+                  logRallyChoice()
                   log()
                   log(s"$Fln executes Rally operation: ${sp.name}")
                   if (!turnState.freeOperation)
@@ -901,6 +907,7 @@ object Bot {
                 getGuerrillasToPlace(numToPlace, sp) match {
                   case GuerrillasToPlace(0, Nil) if force =>
                     if (haveAResource()) {
+                      logRallyChoice()
                       log()
                       log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
                       if (!turnState.freeOperation)
@@ -910,6 +917,7 @@ object Bot {
                     
                   case GuerrillasToPlace(0, Nil) =>  // Flip any active
                     if (numToPlace == 0 && sp.activeGuerrillas > 0 && haveAResource()) {
+                      logRallyChoice()
                       log()
                       log(s"$Fln executes Rally operation: ${sp.name}")
                       if (!turnState.freeOperation)
@@ -920,6 +928,7 @@ object Bot {
                                     
                   case guerrillas =>  // Place guerrillas from sources
                     if (haveAResource()) {
+                      logRallyChoice()
                       log()
                       log(s"$Fln executes Rally operation: ${sp.name}")
                       if (!turnState.freeOperation)
@@ -941,6 +950,7 @@ object Bot {
         // France track?
         if ((turnState.onlyIn.isEmpty || turnState.onlyIn(FranceTrackName)) &&
             game.franceTrack < FranceTrackMax && canContinue && haveAResource()) {
+          logRallyChoice()
           log()
           log(s"$Fln executes Rally operation: France Track")
           if (!turnState.freeOperation)

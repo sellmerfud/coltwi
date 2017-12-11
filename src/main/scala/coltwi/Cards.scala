@@ -512,7 +512,7 @@ object Cards {
     
     // ------------------------------------------------------------------------
     entry(new Card(14, "Protest in Paris", Single, FlnMarked, AlwaysPlay,
-      () => if (game.franceTrack < FranceTrackMax) Shaded else NoEvent,
+      () => if (game.franceTrack < FranceTrackMax) Unshaded else NoEvent,
       (role: Role) => {
         // Executor of Event may move France Track marker up to 2 spaces
         // left or right
@@ -1475,6 +1475,16 @@ object Cards {
         // Self-purge: Activate all Guerrillas in 1 spce in Algeria,
         // roll 1d6.  If result <= to total guerrillas in the space,
         // remove two guerrillas to casualties.
+        val name = askCandidate("Select space in Algeria: ", spaceNames(game.algerianSpaces))
+        activateHiddenGuerrillas(name, game.getSpace(name).hiddenGuerrillas)
+        val sp = game.getSpace(name)
+        val die = dieRoll
+        log(s"\nThere are ${activeG(sp.activeGuerrillas)} in $name")
+        log(s"Die roll: $die")
+        if (die <= sp.totalGuerrillas)
+          removeToCasualties(name, Pieces(activeGuerrillas = 2 min sp.activeGuerrillas))
+        else
+          log(s"No guerrillas are removed from $name")
       },
       (role: Role) => ()
     )),
@@ -1494,7 +1504,7 @@ object Cards {
       ,
       // Mass arbitrary imprisonment: Activate all Guerrillas in any 
       // Sector.  Set to Oppose.
-      (role: Role) => {
+      (role: Role) => if (role == Gov) {
         val priorities = List(
           new Bot.HighestPriority[Space]("Highest population", _.population),
           new Bot.BooleanPriority[Space]("Support Space",      _.isSupport))
