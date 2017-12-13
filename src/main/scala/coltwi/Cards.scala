@@ -416,7 +416,7 @@ object Cards {
       () => Shaded,
       (role: Role) => {
         // Braggadocio: Activate all Guerrillas in 1 Wilaya
-        deck(3).executeUnshaded(role)
+        deck(3).executeUnshaded(role)  // Same as card #3
       },
       (role: Role) => {
         // Sign me up: Until Propaganda Round, treat each Rally in a FLN-Con-trolled
@@ -1135,8 +1135,7 @@ object Cards {
       () => NoEvent,  // Bot will never use this event
       (role: Role) => {
         // Expansion: Free Train in up to 2 selectable spaces.
-        Human.specialActivity.init(false)
-        Human.Train.execute(Human.Params(free = true, maxSpaces = Some(2)))
+        deck(2).executeUnshaded(role)  // Same as card #2
       },
       (role: Role) => ()
     )),
