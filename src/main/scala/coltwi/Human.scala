@@ -170,7 +170,8 @@ object Human {
             nextChoice()
           
           case "done" =>
-            pacifySpaces(trainSpaces, params)
+            if ((trainSpaces filterNot (_ == FranceTrackName)).nonEmpty)
+              pacifySpaces(trainSpaces, params)
             if (specialActivity.allowed && askYorN("\nPerform a special activity? (y/n) "))
               executeSpecialActivity(Deploy::TroopLift::Nil, params)
         }
