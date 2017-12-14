@@ -936,7 +936,75 @@ object ColonialTwilight {
   var game: GameState = _
   
   def displayGameStateDifferences(from: GameState, to: GameState): Unit = {
-    println("displayGameStateDifferences() not yet implemented")
+    var headerShown = false
+    val b = new ListBuffer[String]
+    def showHeader(): Unit = if (!headerShown) {
+      headerShown = true
+      println()
+      println(separator(char = '='))
+      println("The following changes should be made to the game board")
+      println(separator(char = '='))
+    }
+    
+    def showMarker(marker: String, oldValue: Any, newValue: Any, displayValue: Any = null): Unit = if (oldValue != newValue) {
+      val display = if (displayValue == null) newValue.toString else displayValue.toString
+      b += s"Set $marker to: $display"
+    }
+    def showPieces(label: String, oldPieces: Pieces, newPieces: Pieces): Unit = if (oldPieces != newPieces) {
+      wrap(label, newPieces.stringItems) foreach (x => b += x)
+    }
+    def showList(label: String, oldList: Seq[String], newList: Seq[String]): Unit = if (oldList.sorted != newList.sorted) {
+      wrap(label, newList.sorted) foreach (x => b += x)
+    }
+    
+    showMarker("France Track marker",    from.franceTrack, to.franceTrack, FranceTrack(to.franceTrack).name)
+    showMarker("Border Zone marker",     from.borderZoneTrack, to.borderZoneTrack)
+    showMarker("Government commitment", from.commitment, to.commitment)
+    showMarker("Government resources",  from.resources(Gov), to.resources(Gov))
+    showMarker("FLN resources",         from.resources(Fln), to.resources(Fln))
+    
+    if (from.sequence != to.sequence) {
+      val seq = to.sequence
+      val first = seq.firstAction match {
+        case None         => s"Place ${seq.firstEligible} cylinder in: 1st eligible box"
+        case Some(action) => s"Place ${seq.firstEligible} cylinder in: $action box"
+      }
+      val second = seq.secondAction match {
+        case None         => s"Place ${seq.secondEligible} cylinder in: 2nd eligible box"
+        case Some(action) => s"Place ${seq.secondEligible} cylinder in: $action box"
+      }
+      b += ""
+      b += first
+      b += second
+    }
+    
+    showPieces("Out of play: ", from.outOfPlay, to.outOfPlay)
+    showPieces("Casualties : ", from.casualties, to.casualties)
+    showPieces("Available  : ", from.availablePieces, to.availablePieces)
+    
+    showList("Pivotal in play     : ", from.pivotalCardsPlayed.toList map (deck(_).numAndName),
+                                       to.pivotalCardsPlayed.toList map (deck(_).numAndName))
+    showList("Capabilities in play: ", from.capabilities, to.capabilities)
+    showList("Momentum in play    : ", from.momentum, to.momentum)
+    
+    if (b.nonEmpty) {
+      showHeader()
+      b foreach println
+    }
+    
+    for (name <- spaceNames(from.spaces).sorted) {
+      b.clear
+      val (fromSp, toSp) = (from.getSpace(name), to.getSpace(name))
+      showMarker("Support marker", fromSp.support, toSp.support)
+      showMarker("Control marker", fromSp.control, toSp.control)
+      showPieces("Pieces: ", fromSp.pieces, toSp.pieces)
+      showList("Markers: ", fromSp.markers, toSp.markers)
+      if (b.nonEmpty) {
+        showHeader()
+        b.prepend(s"\n${fromSp.nameAndZone} changes:\n${separator()}")
+        b foreach println
+      }
+    }
   }
   
   def spaceNames(spaces: Traversable[Space]): List[String] = (spaces map (_.name)).toList.sorted
