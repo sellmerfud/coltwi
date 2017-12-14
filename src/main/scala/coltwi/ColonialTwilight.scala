@@ -819,8 +819,8 @@ object ColonialTwilight {
         (0.0, s"  (${amountOf(13 - cardsPlayed % 13, "safe card")})")
       b += "Status"
       b += separator()
-      b += f"Support + Commit : ${gov}%2d (${govMargin}%+d)"
-      b += f"Oppose  + Bases  : ${fln}%2d (${flnMargin}%+d)"
+      b += f"Support + Commit : ${gov}%2d (${govMargin}%+3d)"
+      b += f"Oppose  + Bases  : ${fln}%2d (${flnMargin}%+3d)"
       b += separator()
       b += f"Gov resources    : ${resources(Gov)}%2d"
       b += f"FLN resources    : ${resources(Fln)}%2d"
@@ -2342,8 +2342,8 @@ object ColonialTwilight {
       log(separator(char = '='))
       log(s"\nGame over: $winner wins!")
       log(separator())
-      log(f"Government score: ${game.govMargin}%+3d  (support   : $totalSupport%2d, commitment: ${game.commitment}%2d)")
-      log(f"FLN score       : ${game.flnMargin}%+3d  (opposition: $totalOppose%2d, bases     : $flnBases%2d)")
+      log(f"Government score: ${game.govScore}%2d (${game.govMargin}%+3d) | support   : $totalSupport%2d, commitment: ${game.commitment}%2d")
+      log(f"FLN score       : ${game.flnScore}%2d (${game.flnMargin}%+3d) | opposition: $totalOppose%2d, bases     : $flnBases%2d")
     }
     
     log(separator(char = '='))
