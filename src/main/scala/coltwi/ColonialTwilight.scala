@@ -1754,8 +1754,6 @@ object ColonialTwilight {
       removeToAvailable(spaceName,  flnToAvail, logControl = false)
       removeToCasualties(spaceName, flnToCasua, logControl = false)
       increaseCommitment(lostPieces.numOf(FlnBases))
-      if (lostPieces.flnBases > 0)
-        log(s"Move 'Oppose+Bases' marker to ${game.flnScore}")
       
       val updated = game.getSpace(spaceName)
       logControlChange(orig, updated)
@@ -2378,7 +2376,18 @@ object ColonialTwilight {
       val flnBases     = game.totalOnMap(_.flnBases)
       val flnResAmt    = flnBases + franceEntry.resource - game.borderZoneTrack
       if (govResAmt > 0) increaseResources(Gov, govResAmt) else decreaseResources(Gov, -govResAmt)
+      log(f"  Commitment level    : ${game.commitment}%+3d")
+      log(f"  Bases at Gov control: ${govBasePop}%+3d")
+      if (game.recallDeGaulleInEffect)
+        log(f"  Total support       : ${totalSupport}%+3d")
+      else
+        log(f"  French available    : ${frenchAvail}%+3d")
+      log(f"  Resettled sectors   : ${-game.resettledSectors}%+3d")
+      log()
       if (flnResAmt > 0) increaseResources(Fln, flnResAmt) else decreaseResources(Fln, -flnResAmt)
+      log(f"  FLN bases           : ${flnBases}%+3d")
+      log(f"  France Track        : ${franceEntry.resource}%+3d")
+      log(f"  Bordor Zone Status  : ${-game.borderZoneTrack}%+3d")
         
       log("\nCommitment Adjustment Phase")
       log(separator())

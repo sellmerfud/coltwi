@@ -223,7 +223,7 @@ object Cards {
         // Amnesty: Until Propaganda round, in each selected Sweep or Assault
         // space, may also pay an extra Resource ro remove 1 Guerrilla 
         // (may be underground, max 1 per space, removed to available)
-        playMomentum(MoPeaceOfTheBrave) // TODO: need to modify sweep and assault
+        playMomentum(MoPeaceOfTheBrave)
       },
       (role: Role) => {
         // Fight like hell: Free Rally in any 2 selectable spaces.
