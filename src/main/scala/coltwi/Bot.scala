@@ -1663,7 +1663,7 @@ object Bot {
     log("\nFLN agitation")
     nextAgitate(game.resources(Fln) * 2 / 3, Set.empty)
     if (!agitatedOnce)
-      log("none")
+      log("FLN does not agitate any spaces")
   }
   
   // The FLN player may now move any Guerrillas from any space or spaces within a given Wilaya,
@@ -1753,7 +1753,7 @@ object Bot {
       for (wilaya <- ALL_WILAYAS)
         redeployGuerrillas(getSources(game.wilayaSpaces(wilaya)), getDests(game.wilayaSpaces(wilaya)))
     if (!redeployed)
-      log("none")
+      log("FLN does not redeploy any guerrillas")
   }
 }
   
