@@ -605,20 +605,10 @@ object Cards {
       (role: Role) => {
         // Heads broken: Set 1 selected City to Neutral. 
         // Add commitment = population of city
-        val candidates = algerianCandidates(sp => sp.isCity && !sp.isNeutral)
-        val name = if (candidates.isEmpty) ""
-        else if (candidates.size == 1)
-          candidates.head
-        else
-          askCandidate("\nSelect a city: ", candidates)
-
-        if (name == "")
-          log("All cities are already Neutral.  The event has no effect")
-        else {
-          val sp = game.getSpace(name)
-          setSupport(sp.name, Neutral)
-          increaseCommitment(sp.population)
-        }
+        val name = askCandidate("\nSelect a city: ", algerianCandidates(sp => sp.isCity))
+        val sp = game.getSpace(name)
+        setSupport(sp.name, Neutral)
+        increaseCommitment(sp.population)
       },
       (role: Role) => {
         // United Nations resolution condemning violence
