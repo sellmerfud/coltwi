@@ -1081,6 +1081,8 @@ object Bot {
         
       def activates(numGuerrillas: Int): Boolean = activatedBySpace(numGuerrillas).nonEmpty
         
+      def sourceHasBase = game.getSpace(source).hasFlnBase
+
       def cost(paidFor: Set[String]) = (spaces.tail filterNot paidFor).size
       
       // Assumes that num <= the number of guerrillas that are eligible!
@@ -1342,7 +1344,7 @@ object Bot {
                   num    = march.guerrillas.total
                 } {
                   val activates  = path.activates(num)
-                  val guerrillas = path.marchers(num, marchType.hiddenOnly, !activates)
+                  val guerrillas = path.marchers(num, marchType.hiddenOnly, !(path.sourceHasBase || activates))
                   log()
                   if (path.isAdjacent)
                     log(s"$Fln marches adjacent from ${path.source} to ${path.dest}")
@@ -1385,7 +1387,7 @@ object Bot {
               val march        = sortedMarches.head
               val path         = march.paths.head
               val numThisMarch = (if (hiddenOnly) path.maxGuerrillasNoActivate else path.maxGuerrillas) min numNeeded
-              val guerrillas   = path.marchers(numThisMarch, hiddenOnly, !path.activates(numThisMarch))
+              val guerrillas   = path.marchers(numThisMarch, hiddenOnly, !(path.sourceHasBase || path.activates(numThisMarch)))
               val resolved     = ResolvedMarch(path, guerrillas)
               nextMarch(sortedMarches.tail, marchesSoFar :+ resolved, numMarched + numThisMarch, alreadyPaid ++ path.spaces.tail.toSet)
             }
