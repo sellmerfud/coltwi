@@ -912,7 +912,7 @@ object ColonialTwilight {
     }
   
     def spaceSummary(name: String): Seq[String] = {
-      val sp = game.getSpace(name)
+      val sp = getSpace(name)
       val b = new ListBuffer[String]
       val desc = if (sp.isCity) "City"
                  else if (sp.isCountry) "Country, plains"
@@ -1009,7 +1009,7 @@ object ColonialTwilight {
   
   def spaceNames(spaces: Traversable[Space]): List[String] = (spaces map (_.name)).toList.sorted
   
-  def spaces(names: Traversable[String]): List[Space] = (names map game.getSpace).toList
+  def spaces(names: Traversable[String]): List[Space] = (names map game.getSpace).toList.sortBy(_.name)
   
   def capabilityInPlay(cap: String) = game.capabilities contains cap
   

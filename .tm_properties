@@ -1,6 +1,6 @@
 
 scmDisplay  = '${TM_SCM_BRANCH:+ ☛ $TM_SCM_NAME: ${TM_SCM_BRANCH}}'
-relativeDir = '${TM_DIRECTORY/^.*\/projects\/fallingsky\/?(.+)?/${1:?$1:.}/}'
+relativeDir = '${TM_DIRECTORY/^.*\/projects\/colonial-twilight\/?(.+)?/${1:?$1:.}/}'
 windowTitle = '$TM_DISPLAYNAME – $relativeDir $scmDisplay'
 
 excludeFilesInBrowser       = "{$excludeFilesInBrowser,*.class,*.jar}"
