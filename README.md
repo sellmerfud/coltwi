@@ -28,7 +28,7 @@ Simply copy the *games* folder from the older *coltwi-x.x* directory to the
 new *coltwi-x.x* directory.
 
 
-[1]: https://www.dropbox.com/s/dzrb7ehsbl1grzd/awakening-2.12.zip?dl=0
+[1]: https://www.dropbox.com/s/fo97ge3tg22zjc6/coltwi-1.0.zip?dl=0
 
 ## Using the program
 
@@ -66,8 +66,9 @@ command is actually shorthand for `history`.
 
 In fact this use of abbreviated prefixes works at every prompt in the game.  So if you are
 choosing the country where you want to train troops and police, you can enter `cons` to indicate 
-`Constantine` or `med` for `Medea`.  If the prefix you type is not unqiue, the 
-program will display the valid choices.  To get a list of all choices enter a question mark `?`.
+`Constantine` or `med` for `Medea`.  To select the *France Track* enter `fra` which is short for `france track`.
+If the prefix you type is not unqiue, the program will display the valid choices.  
+To get a list of all choices enter a question mark `?`.
 
 
 ## License
