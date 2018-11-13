@@ -1374,12 +1374,13 @@ object ColonialTwilight {
     nextChoice(1, ListMap(items:_*))
   }
 
-  def askCardNumber(prompt: String): Int = {    
+  def askCardNumber(prompt: String): Option[Int] = {    
     readLine(prompt).trim match {
-      case null | "" => askCardNumber(prompt)
+      case null => askCardNumber(prompt)
+      case "" => None
       case input if ("quit".startsWith(input.toLowerCase)) =>
         if (askYorN("Really quit (y/n)? ")) throw ExitGame else askCardNumber(prompt)
-      case INTEGER(num) if deck.isValidCardNumber(num.toInt) => num.toInt
+      case INTEGER(num) if deck.isValidCardNumber(num.toInt) => Some(num.toInt)
       case input => 
         println(s"'$input' is not a valid card number")
         askCardNumber(prompt)
@@ -2051,15 +2052,19 @@ object ColonialTwilight {
         val (cmd, param) = askCommand(prompt, cmds ::: common)
         cmd match {
           case PlayCardCmd =>
-            val cardNum = param flatMap safeToInt getOrElse askCardNumber("Enter the card number: ")
-            game = game.copy(currentCard = Some(cardNum))
-            log()
-            log(s"Turn #${game.turn}")
-            log(separator(char = '='))
-            log(s"Event card: ${deck(cardNum)}")
-            if (!game.isPropRound)
-              log(s"${game.sequence.firstEligible} is first eligible")
-            log(separator(char = '='))
+            val cardNum = param flatMap safeToInt orElse askCardNumber("Enter the card number: ")
+            cardNum  match {
+              case None => getNextCard()
+              case Some(num) =>
+                game = game.copy(currentCard = Some(num))
+                log()
+                log(s"Turn #${game.turn}")
+                log(separator(char = '='))
+                log(s"Event card: ${deck(num)}")
+                if (!game.isPropRound)
+                  log(s"${game.sequence.firstEligible} is first eligible")
+                log(separator(char = '='))
+            }
           
           case _ =>
             cmd.action(param)
@@ -2115,17 +2120,7 @@ object ColonialTwilight {
                  |  card #    - Enter the number of the event card
                  |  card      - You will be prompted for the card number
                """.stripMargin
-    val action = (param: Option[String]) => {
-      val cardNum = param flatMap safeToInt getOrElse askCardNumber("Enter the card number: ")
-      game = game.copy(previousCard = game.currentCard, currentCard = Some(cardNum))
-      log()
-      log(s"Turn #${game.turn}")
-      log(separator(char = '='))
-      log(s"Event card: ${deck(cardNum)}")
-      if (!game.isPropRound)
-        log(s"${game.sequence.firstEligible} is first eligible")
-      log(separator(char = '='))
-    }
+    val action = (param: Option[String]) => ()
   }
   
   object BotCmd extends Command {
@@ -2598,7 +2593,7 @@ object ColonialTwilight {
     val options =  "scenario" :: "status" :: "available" :: "casualties" :: "out of play" ::
                    "events" :: "sequence" :: "all" :: SpaceNames
                   
-    askOneOf("Show: ", options, param, allowNone = true, allowAbort = false) foreach {
+    askOneOf("Show (? for options): ", options, param, allowNone = true, allowAbort = false) foreach {
       case "scenario"     => printSummary(game.scenarioSummary)
       case "status"       => printSummary(game.statusSummary) 
       case "available"    => printSummary(game.availablePiecesSummary)
