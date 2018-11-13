@@ -968,7 +968,9 @@ object Human {
         askMenu(actions map (a => a -> a.toString)).head
       }
       
-      log(s"\nGovernment chooses: $action")
+      log()
+      log(separator())
+      log(s"Government chooses: $action")
       val executedAction = action match {
         case Pass               => performPass(Gov); Pass
         case ExecOpPlusActivity => 

@@ -425,7 +425,9 @@ object Bot {
   object BotPasses extends ActionFlowchartNode {
     val desc = "FLN Bot chooses to pass"
     def execute(): Either[ActionFlowchartNode, Action] = {
-      log(s"\nFLN chooses: ${Pass}")
+      log()
+      log(separator())
+      log(s"FLN chooses: ${Pass}")
       performPass(Fln)
       Right(Pass)
     }
@@ -566,8 +568,9 @@ object Bot {
         }
       }
     }
-    
+
     log()
+    log(separator())
     log(s"$Fln chooses: Terror")
     val numSpaces = nextTerror()
     trySubvert()
@@ -688,6 +691,7 @@ object Bot {
       val oneResourceOnly = !turnState.freeOperation && game.resources(Fln) == 1
       if (!momentumInPlay(MoPeaceTalks) && canKillAtLeastTwo) {
         log()
+        log(separator())
         log(s"$Fln chooses: Attack")
         val numSpaces = if (turnState.limOpOnly || oneResourceOnly) {
           val target = noAmbushKillTwoCandidates.sorted(spacePriority(false)).head
@@ -856,6 +860,7 @@ object Bot {
       def logRallyChoice(): Unit = {
         if (numRallies == 0) {
           log()
+          log(separator())
           log(s"$Fln chooses: Rally")
         }
       }
@@ -1310,6 +1315,7 @@ object Bot {
               val cost = resolved.cost(marchDestinations)
               if (marchDestinations.isEmpty) {
                 log()
+                log(separator())
                 log(s"$Fln chooses: March")
               }
             
