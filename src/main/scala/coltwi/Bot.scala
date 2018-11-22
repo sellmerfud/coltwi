@@ -437,7 +437,7 @@ object Bot {
   object LimOpAndZeroResources extends ActionFlowchartNode {
     val desc = "LimOp and Resources == 0?"
     def execute(): Either[ActionFlowchartNode, Action] = {
-      if (game.resources(Fln) == 0 && turnState.limOpOnly)
+      if (game.resources(Fln) == 0 && turnState.limOpOnly && !botCanDo(Event))
         Left(BotPasses)
       else
         Left(EachAlgerianBaseHasUnderground)
