@@ -2390,17 +2390,17 @@ object ColonialTwilight {
       val numAvailable  = game.availablePieces.totalOf(FRENCH_PIECES)
       val numCasualties = game.casualties.totalOf(FRENCH_PIECES)
       if (numOop > 0) {
-        val num = askInt("\nMove how many French pieces from Out of Play to Available", 0, numOop)
+        val num = askInt("\nMove how many French pieces from Out of Play to Available", 0, numOop, allowAbort = false)
         if (num > 0) {
-          val pieces = askPieces(game.outOfPlay, num, FRENCH_PIECES)
+          val pieces = askPieces(game.outOfPlay, num, FRENCH_PIECES, allowAbort = false)
           movePiecesFromOutOfPlayToAvailable(pieces)
           decreaseCommitment((num + 1) / 3)
         }
       }
       if (numAvailable > 0) {
-        val num = askInt("\nMove how many French pieces from Available to Out of Play", 0, numAvailable)
+        val num = askInt("\nMove how many French pieces from Available to Out of Play", 0, numAvailable, allowAbort = false)
         if (num > 0) {
-          val pieces = askPieces(game.availablePieces, num, FRENCH_PIECES)
+          val pieces = askPieces(game.availablePieces, num, FRENCH_PIECES, allowAbort = false)
           movePiecesFromAvailableToOutOfPlay(pieces)
           increaseCommitment(num / 3)
         }

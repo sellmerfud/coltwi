@@ -998,50 +998,55 @@ object Human {
     }
   }
  
+  // The government may not spend more resources for pacification then the current commitment level.
   def propSupportPhase(): Unit = {
     val canPacify = (sp: Space) => !sp.isSupport &&
                                     sp.population > 0 &&
                                     sp.isGovControlled &&
                                     sp.totalTroops > 0 &&
                                     sp.totalPolice > 0
-    def nextPacify(pacified: Set[String]): Unit = {
+    def nextPacify(pacified: Set[String], totalSpent: Int): Unit = {
       val candidates = spaceNames(game.algerianSpaces filter (sp => !pacified(sp.name) && canPacify(sp))).sorted
-      if (candidates.nonEmpty && game.resources(Gov) > 1) {
+      val maxResources = game.resources(Gov) min (game.commitment - totalSpent)
+      if (candidates.nonEmpty && maxResources > 1) {
         val choices = (candidates map (name => name -> s"Pacify in $name")) :+ ("done" -> "Finished pacifying")
         println()
-        askMenu(choices).head match {
+        println(s"\nResources available: ${game.resources(Gov)}, Resources spent: $totalSpent, Gov commitment: ${game.commitment}")
+        println("Choose one:")
+        askMenu(choices, allowAbort = false).head match {
           case "done" =>
           case name =>
             val sp = game.getSpace(name)
             val maxLevels = if (sp.isOppose) 2 else 1
             val maxInSpace = sp.terror + maxLevels
-            val maxPossible = maxInSpace min (game.resources(Gov) / 2)
+            val maxPossible = maxInSpace min (maxResources/ 2)
             val choices = List.range(maxPossible, -1, -1) map {
-              case 0                                     => (0 -> "Do not pacify in this space")
-              case 2 if sp.terror == 0                   => (1 -> "Shift two levels to support")
-              case 1 if sp.terror == 0 && maxLevels == 1 => (1 -> "Shift one level to support")
-              case 1 if sp.terror == 0                   => (1 -> "Shift one level to neutral")
-              case n if n == maxInSpace                  => (n -> "Remove all terror markers and shift to support")
-              case n if n == maxInSpace - 1              => (n -> "Remove all terror markers and shift to neutral")
-              case n                                     => (n -> s"Remove ${amountOf(n, "terror marker")}")
+              case 0                                          => (0 -> "Do not pacify in this space")
+              case 2 if sp.terror == 0                        => (2 -> "Shift two levels to support")
+              case 1 if sp.terror == 0 && sp.isOppose         => (1 -> "Shift one level to neutral")
+              case 1 if sp.terror == 0                        => (1 -> "Shift one level to support")
+              case n if n == maxInSpace - 1 && sp.isOppose    => (n -> s"Remove ${amountOf(sp.terror, "terror marker")} and shift to neutral")
+              case n if n == maxInSpace                       => (n -> s"Remove ${amountOf(sp.terror, "terror marker")} and shift to support")
+              case n                                          => (n -> s"Remove ${amountOf(n, "terror marker")}")
             }
             println("\nChoose one:")
             val num = askMenu(choices, allowAbort = false).head
             if (num == 0)
-              nextPacify(pacified)
+              nextPacify(pacified, totalSpent)
             else {
+              val spentThisSpace = num * 2;
               log(s"\nGovernment pacifies: $name")
               log(separator())
-              decreaseResources(Gov, num * 2)
+              decreaseResources(Gov, spentThisSpace)
               removeTerror(name, num min sp.terror)
               increaseSupport(name, (num - sp.terror) max 0)
-              nextPacify(pacified + name)
+              nextPacify(pacified + name, totalSpent + spentThisSpace)
             }
         }
       }
     }
     log("\nGovernment pacification")
-    nextPacify(Set.empty)
+    nextPacify(Set.empty, 0)
   }
   
   // The Government player may move any Troops on the map to any Cities or spaces with friendly Bases.
@@ -1058,11 +1063,11 @@ object Human {
           case "done" =>
           case "redeploy" =>
             try {
-              val srcName  = askCandidate("\nSelect space with troops: ", sources)
-              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName))
+              val srcName  = askCandidate("\nSelect space with troops: ", sources, allowAbort = false)
+              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName), allowAbort = false)
               val src      = game.getSpace(srcName)
-              val num      = askInt(s"Deploy how many troops out of $srcName", 0, src.totalTroops)
-              val troops   = askPieces(src.pieces, num, TROOPS)
+              val num      = askInt(s"Deploy how many troops out of $srcName", 0, src.totalTroops, allowAbort = false)
+              val troops   = askPieces(src.pieces, num, TROOPS, allowAbort = false)
               redeployed = true
               redeployPieces(troops, srcName, destName)
             }
@@ -1088,11 +1093,11 @@ object Human {
           case "done" =>
           case "redeploy" =>
             try {
-              val srcName  = askCandidate("\nSelect space with police: ", sources)
-              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName))
+              val srcName  = askCandidate("\nSelect space with police: ", sources, allowAbort = false)
+              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName), allowAbort = false)
               val src      = game.getSpace(srcName)
-              val num      = askInt(s"Deploy how many police out of $srcName", 0, src.totalPolice)
-              val police   = askPieces(src.pieces, num, POLICE)
+              val num      = askInt(s"Deploy how many police out of $srcName", 0, src.totalPolice, allowAbort = false)
+              val police   = askPieces(src.pieces, num, POLICE, allowAbort = false)
               redeployed = true
               redeployPieces(police, srcName, destName)
             }
