@@ -723,6 +723,8 @@ object Human {
             "done"  -> "Finished with Troop Lift activity",
             "abort" -> "Abort the Troop Lift special activity")
             
+          if (selectedSpaces.nonEmpty)
+            println(s"\nTroop Lift spaces selected: ${selectedSpaces.mkString(", ")}")
           println("\nChoose one:")
           askMenu(choices).head match {
             case "done" =>
