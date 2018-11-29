@@ -517,7 +517,7 @@ object Human {
         val choices = List(
           choice(assaultCandidates.nonEmpty, "assault", s"Select an assault space"),
           choice(specialActivity.allowed,    "special", s"Perform a special activity"),
-          choice(true,                       "done",    s"Finished selecting asault spaces"),
+          choice(true,                       "done",    s"Finished selecting assault spaces"),
           choice(true,                       "abort",   s"Abort the entire $Gov turn")
         ).flatten
       
