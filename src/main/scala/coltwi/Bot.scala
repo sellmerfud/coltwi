@@ -392,6 +392,7 @@ object Bot {
     
     val primaryNames = spaceNames(primary).toSet
     val secondary  = game.algerianSpaces filter (sp => 
+      sp.population > 0          &&
       !primaryNames(sp.name)     &&
       sp.isFlnControlled         && 
       hasSafeHiddenGuerrilla(sp) && 
