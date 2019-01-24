@@ -2229,7 +2229,7 @@ object ColonialTwilight {
                        previousCard       = game.currentCard,
                        currentCard        = Some(card.number),
                        pivotalCardsPlayed = game.pivotalCardsPlayed + card.number)
-     card.executeUnshaded(role)
+      card.executeUnshaded(role)
      
     }
   }
@@ -2458,7 +2458,12 @@ object ColonialTwilight {
         
         for (m <- game.momentum)
           log(s"Discard momentum card: $m")
-        game = game.copy(momentum = Nil)
+
+        // Remove all momenttum cards
+        // Remove the Coup d'etat card from the list of pivotal cards played
+        // because it may be played once per campaign.
+        game = game.copy(momentum = Nil, 
+                        pivotalCardsPlayed = game.pivotalCardsPlayed filterNot (_ == PivotalCoupdEtat))
       }
     }
   }
