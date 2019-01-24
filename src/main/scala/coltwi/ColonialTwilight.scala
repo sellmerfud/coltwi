@@ -2817,8 +2817,41 @@ object ColonialTwilight {
   }
   
   def adjustPivotal(): Unit = {
-    println("\nadjust pivotal has not been implemented.")
+    // The only pivotal card that the Bot will ever play is 'Morocco and Tunisia Independent'
+    // So that is the only Bot card included in this set.
+    val AllPivots = Set(PivotalCoupdEtat, PivotalMobilization, PivotalRecallDeGaulle, PivotalMoroccoTunisiaIndepdent)
+    var included = game.pivotalCardsPlayed
+    var excluded = AllPivots -- included
+    
+    def nextAdjustment(): Unit = {
+      val choices = (included.toList.sorted map (c => c -> s"Remove ${deck(c).numAndName}")) ++
+                    (excluded.toList.sorted map (c => c -> s"Add ${deck(c).numAndName}")) :+
+                    (0 -> "Finished")
+      println("\nPivotal cards that have been played")
+      println("Choose one:")
+      askMenu(choices, allowAbort = false).head match {
+        case 0 =>
+        case c =>
+          if (included contains c) {
+            included = included - c
+            excluded = excluded + c
+          }
+          else {
+            included = included + c
+            excluded = excluded - c
+          }
+          nextAdjustment()
+      }
+    }
+    
+    def cardList(x: Set[Int]): List[String] = x.toList.sorted map (deck(_).numAndName)
+    nextAdjustment()
+    if (included != game.pivotalCardsPlayed) {
+      logAdjustment("pivotal cards played", cardList(game.pivotalCardsPlayed), cardList(included))
+      game = game.copy(pivotalCardsPlayed = included)
+    }
   }
+  
     
   def adjustCapabilities(): Unit = {
     var included = game.capabilities
