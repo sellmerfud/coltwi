@@ -571,7 +571,7 @@ object FUtil {
         case '?' => if (s == NUL || ISDIRSEP(s) || PERIOD(s)) return false else shift_s
 
         case '*' =>
-          while(shift_p && p == '*') {}  // Eat consequtive asterisks
+          while(shift_p && p == '*') {}  // Eat consecutive asterisks
           if (PERIOD(s))
             return false
           if (p == NUL)
@@ -913,7 +913,7 @@ object FUtil {
     */
     def cleanPath: Pathname = {
       val EMPTY = List[String]()
-      // Consequtive slashes are removed by the #filenames method.
+      // Consecutive slashes are removed by the #filenames method.
       // `segs` is the cleaned path segments,
       // `count` is the number of leading `..` that must be accounted for.
       val (count, segs) = (filenames foldRight (0, EMPTY)) { case (seg, (count, segs)) =>

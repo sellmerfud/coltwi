@@ -786,7 +786,7 @@ object ColonialTwilight {
     def updatePieces(space: Space, pieces: Pieces): GameState = updateSpace(space.copy(pieces = pieces))
     
     def isPropRound = currentCard map deck.isPropagandaCard getOrElse false
-    def isConsequtivePropCard = isPropRound && (previousCard map deck.isPropagandaCard getOrElse false)
+    def isConsecutivePropCard = isPropRound && (previousCard map deck.isPropagandaCard getOrElse false)
     
     def govScore  = totalOnMap(_.supportValue) + commitment
     def govMargin = govScore - 35
@@ -2343,8 +2343,8 @@ object ColonialTwilight {
     log(s"${ordinal(game.propCardsPlayed)} Propaganda Round")
     log(separator(char = '='))
     
-    if (game.isConsequtivePropCard) {
-      log("\nConsequtive Propagand cards.  Propaganda round skipped.")
+    if (game.isConsecutivePropCard) {
+      log("\nConsecutive Propagand cards.  Propaganda round skipped.")
       if (finalPropRound)
         logGameOver()
     }
