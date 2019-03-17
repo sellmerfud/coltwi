@@ -33,7 +33,7 @@ import coltwi.ColonialTwilight._
 
 class Full extends Scenario {
   val name               = "Full: 1955-1962: Algerie Francaise!"
-  val numberOfPropCards  = 4
+  val numberOfPropCards  = 5
   val resources          = Resources(gov = 16, fln = 8)
   val commitment         = 25
   val franceTrack        = franceTrackFromLetter('A')
