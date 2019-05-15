@@ -324,10 +324,12 @@ object Bot {
       if (pieces.algerianPolice > 0) Pieces(algerianPolice = 1)
       else Pieces(algerianTroops = 1)
     if (last2Cubes.nonEmpty) {
+      botDebug(s"Last 2 cubes: ${last2Cubes map (_.name)}")
       val target = topPriority(last2Cubes, List(has2Police, hasPolice))
       List(SubvertCmd(false, target.name, target.only(ALGERIAN)))
     }
     else if (lastCube.size == 1) {
+      botDebug(s"Last(1) single cube: ${lastCube map (_.name)}")
       val target = lastCube.head
       (generic filter (_.name != target.name)) match {
         case Nil if game.guerrillasAvailable > 0 => List(SubvertCmd(true,  target.name, bestPiece(target.pieces)))
@@ -339,13 +341,14 @@ object Bot {
       }
     }
     else if (lastCube.nonEmpty) {
-      def getBest(candidates: List[Space]): List[SubvertCmd] = if (candidates.size == 2)
+      botDebug(s"Last single cube: ${lastCube map (_.name)}")
+      def getBest(candidates: List[Space]): List[SubvertCmd] = if (candidates.isEmpty)
         Nil
       else {
         val target = topPriority(candidates, List(hasPolice))
         SubvertCmd(false, target.name, bestPiece(target.pieces)) :: getBest(candidates filterNot (_.name == target.name))
       }
-      getBest(lastCube)
+      getBest(lastCube) take 2
     }
     else if (withPolice.nonEmpty && game.guerrillasAvailable > 0) {
       val target = shuffle(withPolice).head
@@ -361,6 +364,7 @@ object Bot {
   
   // Note that no guerrillas are activated when subverting
   def trySubvert(): Unit = if (turnState.canDoSpecialActivity) {
+    botDebug("Considering Subvert special activity")
     subvertCommands match {
       case Nil =>
       case cmds =>
@@ -376,6 +380,7 @@ object Bot {
   }
   
   def tryExtort(protectedGuerrillas: List[(String, Int)] = Nil): Unit = if (turnState.canDoSpecialActivity && game.resources(Fln) < 5) {
+    botDebug("Considering Extort special activity")
     val protectedGs = protectedGuerrillas.toMap.withDefaultValue(0)
     def hasSafeHiddenGuerrilla(sp: Space) = 
       ((sp.flnBases == 0 || sp.isCountry) && sp.hiddenGuerrillas > protectedGs(sp.name)) ||
