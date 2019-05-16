@@ -312,23 +312,34 @@ object Bot {
   // - Replace last troop with guerrilla in one space
 
   def subvertCommands: List[SubvertCmd] = {
-    val ALGERIAN = List(AlgerianPolice, AlgerianTroops)
     val hasG = (sp: Space) => sp.hiddenGuerrillas > 0
     val last2Cubes = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes == 2 && sp.frenchCubes == 0)
     val lastCube   = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes == 1 && sp.frenchCubes == 0)
     val withPolice = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianPolice > 0)
-    val has2Police = new BooleanPriority[Space]("2 Police cubes", _.algerianPolice == 1)
+    val has2Police = new BooleanPriority[Space]("2 Police cubes", _.algerianPolice > 1)
     val hasPolice  = new BooleanPriority[Space]("Police cube",    _.algerianPolice > 0)
     val generic    = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes > 0)
+    val genericMultiple = game.algerianSpaces filter (sp => hasG(sp) && sp.algerianCubes > 1)
+    // Assume that the pieces contains at least 1 Algerian cube
     def bestPiece(pieces: Pieces): Pieces = 
       if (pieces.algerianPolice > 0) Pieces(algerianPolice = 1)
-      else Pieces(algerianTroops = 1)
+      else                           Pieces(algerianTroops = 1)
+    // Assume that the pieces contains 2 or more Algerian cubes
+    def best2Pieces(pieces: Pieces): Pieces = 
+      if (pieces.algerianPolice > 1)      Pieces(algerianPolice = 2)
+      else if (pieces.algerianPolice > 0) Pieces(algerianPolice = 1, algerianTroops = 1)
+      else                                Pieces(algerianTroops = 2)
+        
     if (last2Cubes.nonEmpty) {
+      // Remove two cubes - and that is the max
       botDebug(s"Last 2 cubes: ${last2Cubes map (_.name)}")
       val target = topPriority(last2Cubes, List(has2Police, hasPolice))
-      List(SubvertCmd(false, target.name, target.only(ALGERIAN)))
+      List(SubvertCmd(false, target.name, best2Pieces(target.pieces)))
     }
     else if (lastCube.size == 1) {
+      // Replace last cube in the one space if possible
+      // Otherwise remove the last cube in the one space, and remove one 
+      // other algerian cube if possible from any other space.
       botDebug(s"Last(1) single cube: ${lastCube map (_.name)}")
       val target = lastCube.head
       (generic filter (_.name != target.name)) match {
@@ -341,6 +352,7 @@ object Bot {
       }
     }
     else if (lastCube.nonEmpty) {
+      // Remove the last cube from two of the candidate spaces in priority order.
       botDebug(s"Last single cube: ${lastCube map (_.name)}")
       def getBest(candidates: List[Space]): List[SubvertCmd] = if (candidates.isEmpty)
         Nil
@@ -350,16 +362,43 @@ object Bot {
       }
       getBest(lastCube) take 2
     }
-    else if (withPolice.nonEmpty && game.guerrillasAvailable > 0) {
-      val target = shuffle(withPolice).head
-      List(SubvertCmd(true, target.name, bestPiece(target.pieces)))
-    }
-    else if (generic.size == 1) {
-      val target = generic.head
-      List(SubvertCmd(true, target.name, bestPiece(target.pieces)))
+    else if (game.sequence.numActed == 1) {  // If the Government has already acted on the current card.
+      // If we get here, then we were not able to subvert in any spaces
+      // to remove the last Algerian cube.
+      // If the government has already acted on the current card then
+      // we attempt to:
+      //   Replace one police cube in a single space - if we have a guerrilla available
+      //   If there is only one candidate space replace a cube - if we have a guerrilla available
+      //   Remove a cube in up to two candidate spaces
+      if (withPolice.nonEmpty && game.guerrillasAvailable > 0) {
+        val target = shuffle(withPolice).head
+        List(SubvertCmd(true, target.name, bestPiece(target.pieces)))
+      }
+      else if (generic.size == 1 && game.guerrillasAvailable > 0) {
+        val target = shuffle(generic).head
+        List(SubvertCmd(true, target.name, bestPiece(target.pieces)))
+      }
+      else if (genericMultiple.nonEmpty) { // Two Algerian cubes in one space
+        val target = topPriority(genericMultiple, List(has2Police, hasPolice))
+        List(SubvertCmd(false, target.name, best2Pieces(target.pieces)))
+      }
+      else {
+        // Up to two spaces with a single Algerian cube
+        generic.size match {
+          case 0 =>  Nil
+          case 1 =>
+            val target = topPriority(generic, List(hasPolice))
+            List(SubvertCmd(false, target.name, bestPiece(target.pieces)))
+          case _ =>
+            val t1 = topPriority(generic, List(hasPolice))
+            val t2 = topPriority(generic filter (_.name != t1.name), List(hasPolice))
+            List(SubvertCmd(false, t1.name, bestPiece(t1.pieces)),
+                 SubvertCmd(false, t2.name, bestPiece(t2.pieces)))
+        }
+      }
     }
     else
-      generic take 2 map (sp => SubvertCmd(false, sp.name, bestPiece(sp.pieces)))
+      Nil
   }
   
   // Note that no guerrillas are activated when subverting
