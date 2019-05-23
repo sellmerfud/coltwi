@@ -2,6 +2,14 @@
 
 SetLocal EnableDelayedExpansion
 
+rem   _____      _             _       _   _______       _ _ _       _     _
+rem  / ____|    | |           (_)     | | |__   __|     (_) (_)     | |   | |
+rem | |     ___ | | ___  _ __  _  __ _| |    | |_      ___| |_  __ _| |__ | |_
+rem | |    / _ \| |/ _ \| '_ \| |/ _` | |    | \ \ /\ / / | | |/ _` | '_ \| __|
+rem | |___| (_) | | (_) | | | | | (_| | |    | |\ V  V /| | | | (_| | | | | |_
+rem  \_____\___/|_|\___/|_| |_|_|\__,_|_|    |_| \_/\_/ |_|_|_|\__, |_| |_|\__|
+rem                                                             __/ |
+rem                                                            |___/
 rem This script is used to run the scala implementation of the
 rem solo AI for Colonial Twilight
 

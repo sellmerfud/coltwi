@@ -1,6 +1,12 @@
 
-// Colonial Twilight
-//
+//   _____      _             _       _   _______       _ _ _       _     _
+//  / ____|    | |           (_)     | | |__   __|     (_) (_)     | |   | |
+// | |     ___ | | ___  _ __  _  __ _| |    | |_      ___| |_  __ _| |__ | |_
+// | |    / _ \| |/ _ \| '_ \| |/ _` | |    | \ \ /\ / / | | |/ _` | '_ \| __|
+// | |___| (_) | | (_) | | | | | (_| | |    | |\ V  V /| | | | (_| | | | | |_
+//  \_____\___/|_|\___/|_| |_|_|\__,_|_|    |_| \_/\_/ |_|_|_|\__, |_| |_|\__|
+//                                                             __/ |
+//                                                            |___/
 // An scala implementation of the solo AI for the game 
 // Falling Sky The Gallic Revolt Against Caesar, 
 // designed by Andrew Ruhnke and Volko Ruhnke
