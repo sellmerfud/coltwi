@@ -628,7 +628,9 @@ object ColonialTwilight {
     val additionalSetup: () => Unit = () => ()
   }
   
-  case class GameParameters(scenarioName: String, botDebug: Boolean = false)
+  case class GameParameters(scenarioName: String,
+                            finalPropSupport: Boolean = false, // Allow support in final Prop round (optional rule)
+                            botDebug: Boolean = false)
   
   sealed trait Action
   case object Pass               extends Action    { override def toString() = "Pass" }
@@ -2319,14 +2321,14 @@ object ColonialTwilight {
   }
   
   def resolvePropagandaCard(): Unit = {
-    val finalPropRound = game.propCardsPlayed == game.numberOfPropCards
+    val finalPropRound = true // game.propCardsPlayed == game.numberOfPropCards
     def logGameOver(): Unit = {
       // FLN wins ties
       val winner = if (!finalPropRound || game.flnMargin >= game.govMargin) Fln else Gov
       val totalSupport = game.totalOnMap(_.supportValue)
       val totalOppose  = game.totalOnMap(_.opposeValue)
       val flnBases     = game.totalOnMap(_.flnBases)
-      log()
+      log("\n\n")
       log(separator(char = '='))
       if (finalPropRound)
         log("Final Propaganda card")
@@ -2415,55 +2417,59 @@ object ColonialTwilight {
       }
       
       // Game ends after commitiment adjustment in the final prop round
-      if (finalPropRound)
+      if (finalPropRound && !game.params.finalPropSupport)
         logGameOver()
       else {
         log("\nSupport Phase")
         log(separator())
         Human.propSupportPhase()
         Bot.propAgitatePhase()
-      
-        log("\nRedeploy Phase")
-        log(separator())
-        // Don't adjust control until both sides have finished redeploy!!!
-        val preRedeployState = game
-        Human.propRedeployPhase(preRedeployState)
-        Bot.propRedeployPhase()
-        // Now log all of the changes in control.
-        log()
-        for (sp <- preRedeployState.spaces; updated = game.getSpace(sp.name))
-          logControlChange(sp, updated)
-      
-        log("\nReset Phase")
-        log(separator())
-        val govCasualtiesOop = (game.casualties.frenchCubes + game.casualties.govBases) / 3
-        val flnCasualtiesOop = game.casualties.hiddenGuerrillas / 3
-
-        val govPieces = askPieces(game.casualties, govCasualtiesOop, FRENCH_PIECES, allowAbort = false,
-            heading = Some(s"\nYou must move ${amountOf(govCasualtiesOop, "French piece")} from casualties to Out of Play"))
-        movePiecesFromCasualtiesToOutOfPlay(govPieces)
-        movePiecesFromCasualtiesToAvailable(game.casualties.only(GOV_PIECES))
-      
-        movePiecesFromCasualtiesToOutOfPlay(Pieces(hiddenGuerrillas = flnCasualtiesOop))
-        movePiecesFromCasualtiesToAvailable(game.casualties.only(HiddenGuerrillas))
         
-        if (game.franceTrack > 0)
-          decreaseFranceTrack(1)
-        if (game.borderZoneTrack > 0)
-          decreaseBorderZoneTrack(1)
-        for (sp <- game.algerianSpaces filter (_.terror > 0))
-          removeTerror(sp.name, 1)
-        for (sp <- game.spaces filter (_.activeGuerrillas > 0))
-          hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
-        
-        for (m <- game.momentum)
-          log(s"Discard momentum card: $m")
+        if (finalPropRound)
+          logGameOver()  // Will only get here if game.params.finalPropSupport == false
+        else {
+          log("\nRedeploy Phase")
+          log(separator())
+          // Don't adjust control until both sides have finished redeploy!!!
+          val preRedeployState = game
+          Human.propRedeployPhase(preRedeployState)
+          Bot.propRedeployPhase()
+          // Now log all of the changes in control.
+          log()
+          for (sp <- preRedeployState.spaces; updated = game.getSpace(sp.name))
+            logControlChange(sp, updated)
+      
+          log("\nReset Phase")
+          log(separator())
+          val govCasualtiesOop = (game.casualties.frenchCubes + game.casualties.govBases) / 3
+          val flnCasualtiesOop = game.casualties.hiddenGuerrillas / 3
 
-        // Remove all momenttum cards
-        // Remove the Coup d'etat card from the list of pivotal cards played
-        // because it may be played once per campaign.
-        game = game.copy(momentum = Nil, 
-                        pivotalCardsPlayed = game.pivotalCardsPlayed filterNot (_ == PivotalCoupdEtat))
+          val govPieces = askPieces(game.casualties, govCasualtiesOop, FRENCH_PIECES, allowAbort = false,
+              heading = Some(s"\nYou must move ${amountOf(govCasualtiesOop, "French piece")} from casualties to Out of Play"))
+          movePiecesFromCasualtiesToOutOfPlay(govPieces)
+          movePiecesFromCasualtiesToAvailable(game.casualties.only(GOV_PIECES))
+      
+          movePiecesFromCasualtiesToOutOfPlay(Pieces(hiddenGuerrillas = flnCasualtiesOop))
+          movePiecesFromCasualtiesToAvailable(game.casualties.only(HiddenGuerrillas))
+        
+          if (game.franceTrack > 0)
+            decreaseFranceTrack(1)
+          if (game.borderZoneTrack > 0)
+            decreaseBorderZoneTrack(1)
+          for (sp <- game.algerianSpaces filter (_.terror > 0))
+            removeTerror(sp.name, 1)
+          for (sp <- game.spaces filter (_.activeGuerrillas > 0))
+            hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
+        
+          for (m <- game.momentum)
+            log(s"Discard momentum card: $m")
+
+          // Remove all momenttum cards
+          // Remove the Coup d'etat card from the list of pivotal cards played
+          // because it may be played once per campaign.
+          game = game.copy(momentum = Nil, 
+                          pivotalCardsPlayed = game.pivotalCardsPlayed filterNot (_ == PivotalCoupdEtat))
+        }
       }
     }
   }
@@ -2626,23 +2632,25 @@ object ColonialTwilight {
     
   def adjustSettings(param: Option[String]): Unit = {
     val options = List("gov resources", "fln resources", "commitment", "france track", "border zone",
-                       "casualties", "out of play", "pivotal", "capabilities", "momentum", "bot debug"
+                       "casualties", "out of play", "pivotal", "capabilities", "momentum", "bot debug",
+                       "final prop support"
                        ).sorted ::: SpaceNames
 
     val choice = askOneOf("[Adjust] (? for list): ", options, param, allowNone = true, allowAbort = false)
     choice foreach {
-      case "gov resources" => adjustGovResources()
-      case "fln resources" => adjustFlnResources()
-      case "commitment"    => adjustCommitment()
-      case "france track"  => adjustFranceTrack()
-      case "border zone"   => adjustBorderZoneTrack()
-      case "casualties"    => adjustCasualties()
-      case "out of play"   => adjustOutOfPlay()
-      case "pivotal"       => adjustPivotal()
-      case "capabilities"  => adjustCapabilities()
-      case "momentum"      => adjustMomentum()
-      case "bot debug"     => adjustBotDebug()
-      case name            => adjustSpace(name)
+      case "gov resources"      => adjustGovResources()
+      case "fln resources"      => adjustFlnResources()
+      case "commitment"         => adjustCommitment()
+      case "france track"       => adjustFranceTrack()
+      case "border zone"        => adjustBorderZoneTrack()
+      case "casualties"         => adjustCasualties()
+      case "out of play"        => adjustOutOfPlay()
+      case "pivotal"            => adjustPivotal()
+      case "capabilities"       => adjustCapabilities()
+      case "momentum"           => adjustMomentum()
+      case "bot debug"          => adjustBotDebug()
+      case "final prop support" => adjustFinalPropSupport()
+      case name                 => adjustSpace(name)
     }
   }
   
@@ -3067,6 +3075,12 @@ object ColonialTwilight {
       else
         game = game.updateSpace(sp.removeMarker(Plus1BaseMarker))
     }
+  }
+  
+  def adjustFinalPropSupport(): Unit = {
+    val newValue = !game.params.finalPropSupport
+    logAdjustment("Final prop support", game.params.finalPropSupport, newValue)
+    game = game.copy(params = game.params.copy(finalPropSupport = newValue))
   }
   
   def adjustBotDebug(): Unit = {
