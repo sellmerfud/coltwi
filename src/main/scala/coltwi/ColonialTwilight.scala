@@ -44,8 +44,6 @@ import scala.io.StdIn.readLine
 import scala.language.implicitConversions
 import scenarios._
 import FUtil.Pathname
-import Pickling.{ loadGameState, saveGameState }
-
 
 object ColonialTwilight {
   
@@ -436,6 +434,13 @@ object ColonialTwilight {
   case object Sector          extends SpaceType
   case object Country         extends SpaceType
   
+  object SpaceType {
+    val AllTypes = List(City, Sector, Country)
+    def apply(name: String): SpaceType = AllTypes find (t => t.toString.toLowerCase == name.toLowerCase) getOrElse {
+      throw new IllegalArgumentException(s"Invalid SpaceType name: $name")
+    }
+  }
+  
   sealed trait Control
   case object Uncontrolled  extends Control { override def toString() = "Uncontrolled"}
   case object GovControl    extends Control { override def toString() = "Government control"}
@@ -446,10 +451,24 @@ object ColonialTwilight {
   case object Support    extends SupportValue
   case object Oppose     extends SupportValue
   
+  object SupportValue {
+    val AllSupport = List(Neutral, Support, Oppose)
+    def apply(name: String): SupportValue = AllSupport find (t => t.toString.toLowerCase == name.toLowerCase) getOrElse {
+      throw new IllegalArgumentException(s"Invalid SupportValue name: $name")
+    }
+  }
+  
   sealed trait Terrain
   case object Mountains extends Terrain
   case object Plains    extends Terrain
   case object Urban     extends Terrain
+  
+  object Terrain {
+    val AllTerrains = List(Mountains, Plains, Urban)
+    def apply(name: String): Terrain = AllTerrains find (t => t.toString.toLowerCase == name.toLowerCase) getOrElse {
+      throw new IllegalArgumentException(s"Invalid Terrain name: $name")
+    }
+  }
   
   case class Space(
     name:           String,
@@ -638,12 +657,21 @@ object ColonialTwilight {
                             finalPropSupport: Boolean = false, // Allow support in final Prop round (optional rule)
                             botDebug: Boolean = false)
   
-  sealed trait Action
-  case object Pass               extends Action    { override def toString() = "Pass" }
-  case object Event              extends Action    { override def toString() = "Execute Event" }
-  case object ExecOpPlusActivity extends Action    { override def toString() = "Execute Op & Special Activity" }
-  case object ExecLimitedOp      extends Action    { override def toString() = "Execute Limited Op" }
-  case object ExecOpOnly         extends Action    { override def toString() = "Execute Op Only" }
+  sealed trait Action {
+    val name: String
+  }
+  case object Pass               extends Action    { val name = "Pass";               override def toString() = "Pass" }
+  case object Event              extends Action    { val name = "Event";              override def toString() = "Execute Event" }
+  case object ExecOpPlusActivity extends Action    { val name = "ExecOpPlusActivity"; override def toString() = "Execute Op & Special Activity" }
+  case object ExecLimitedOp      extends Action    { val name = "ExecLimitedOp";      override def toString() = "Execute Limited Op" }
+  case object ExecOpOnly         extends Action    { val name = "ExecOpOnly";         override def toString() = "Execute Op Only" }
+  
+  object Action {
+    val AllActions = List(Pass, Event, ExecOpPlusActivity, ExecLimitedOp, ExecOpOnly)
+    def apply(name: String): Action = AllActions find (a => a.name.toLowerCase == name.toLowerCase) getOrElse {
+      throw new IllegalArgumentException(s"Invalid Action name: $name")
+    }
+  }
   
   val secondActions: Map[Action, List[Action]] = Map(
     Pass               -> List(Event, ExecOpPlusActivity, ExecOpOnly, ExecLimitedOp, Pass),
@@ -1960,7 +1988,8 @@ object ColonialTwilight {
   }
   
   def saveTurn(): Unit = {
-    saveGameState(gameFilePath(turnFilename(game.turn)), game)
+    // saveGameState(gameFilePath(turnFilename(game.turn)), game)
+    SavedGame.save(gameFilePath(turnFilename(game.turn)), game)
   }
   
   // Save a brief description of the game.
@@ -1984,7 +2013,8 @@ object ColonialTwilight {
       throw new IllegalStateException(s"No saved file found for game '$name'")
     }
     gameName = Some(name)
-    game = loadGameState(gameFilePath(filename))
+    game = SavedGame.load(gameFilePath(filename))
+    // game = loadGameState(gameFilePath(filename))
   }
 
   // Return the list of saved games
@@ -2259,7 +2289,8 @@ object ColonialTwilight {
       if (askYorN(s"Are you sure you want to rollback to turn $turnNumber? (y/n) ")) {
         // Games are saved at the end of the turn, so we actually want
         // to load the file with turnNumber -1.
-        val newGameState = loadGameState(gameFilePath(turnFilename(turnNumber - 1)))
+        val newGameState = SavedGame.load(gameFilePath(turnFilename(turnNumber - 1)))
+        // val newGameState = loadGameState(gameFilePath(turnFilename(turnNumber - 1)))
         removeTurnFiles(turnNumber)      
         displayGameStateDifferences(game, newGameState)
         game = newGameState
@@ -2561,13 +2592,21 @@ object ColonialTwilight {
       else
         (None, redirect(tokens))
     
-      def normalize(n: Int) = 0 max n min (game.turn + 1)
+      // We have a special case where the game.turn has been incremented, but if a 
+      // card has not yet been played for the current turn, then there will not be
+      // at "Turn #" entry in the log for the current turn.
+      // In this case we will act as if the turn number is still the previous turn.
+      val currentTurn = if (game.history exists (line => line startsWith s"Turn #${game.turn}"))
+        game.turn
+      else
+        game.turn - 1
+      def normalize(n: Int) = 0 max n min (currentTurn + 1)
       val START = 0
-      val END   = game.turn + 1
+      val END   = currentTurn + 1
       val (start, end) = param match {
-        case None                                   => (game.turn, game.turn + 1)
+        case None                                   => (currentTurn, currentTurn + 1)
         case Some(POS(n))                           => (normalize(n.toInt), normalize(n.toInt + 1))
-        case Some(NEG(n))                           => (normalize(game.turn - n.toInt), END)
+        case Some(NEG(n))                           => (normalize(currentTurn - n.toInt), END)
         case Some(PRE(e))                           => (START, normalize(e.toInt + 1))
         case Some(SUF(s))                           => (normalize(s.toInt), END)
         case Some(RNG(s, e)) if (e.toInt < s.toInt) => (normalize(e.toInt), normalize(s.toInt + 1))
@@ -2576,15 +2615,15 @@ object ColonialTwilight {
         case Some(p)                                => throw Error(s"Invalid parameter: $p")
       }
       
-      val SOT = """Turn #\s*(\d+)""".r
+      val SOT = """Turn #\s*(\d+).*""".r
       def turnIndex(num: Int): Int = {
         val turnMatch = (x: String) => x match {
           case SOT(n) if n.toInt == num => true
           case _ => false
         }
         if (num == 0)             0
-        else if (num > game.turn) game.history.size
-        else                      game.history indexWhere turnMatch
+        else if (num > currentTurn) game.history.size
+        else                        game.history indexWhere turnMatch
       } 
       val ignore = turnIndex(start)
       val length = turnIndex(end) - ignore
