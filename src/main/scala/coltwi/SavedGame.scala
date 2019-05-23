@@ -197,7 +197,7 @@ object SavedGame {
       "recallDeGaulleCancelled" -> gameState.recallDeGaulleCancelled,
       "history"                 -> gameState.history
     )
-    Json.build(top).toString
+    Json.build(top)
   }
   
   private def fromGameJson(jsonValue: String): GameState = {

@@ -2093,6 +2093,9 @@ object ColonialTwilight {
             val cardNum = param flatMap safeToInt orElse askCardNumber("Enter the card number: ")
             cardNum  match {
               case None => getNextCard()
+              case Some(num) if !deck.isValidCardNumber(num) =>
+                println(s"'$num' is not a valid card number")
+                getNextCard()
               case Some(num) =>
                 game = game.copy(currentCard = Some(num))
                 log()

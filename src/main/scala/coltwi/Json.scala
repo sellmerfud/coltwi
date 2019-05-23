@@ -36,15 +36,8 @@ package coltwi
 import scala.util.Sorting
 import scala.util.parsing.combinator._
 
-// Utilities to build and parse Json used when saveing game state
 
-trait JsonSerializable {
-  def toJson(): String
-}
-
-/**
-* An Exception thrown when parsing or building JSON.
-*/
+// An Exception thrown when parsing or building JSON.
 class JsonException(reason: String) extends Exception(reason)
 
 
@@ -82,9 +75,7 @@ private class EscapedStringParser extends JavaTokenParsers {
   }
 }
 
-/**
-* Stolen from the scala book and fixed by making string quotation explicit.
-*/
+// Stolen from the scala book and fixed by making string quotation explicit.
 private class JsonParser extends JavaTokenParsers {
   def obj: Parser[Map[String, Any]] = "{" ~> repsep(member, ",") <~ "}" ^^ (Map.empty ++ _)
 
@@ -121,24 +112,12 @@ private class JsonParser extends JavaTokenParsers {
 }
 
 
-/**
-* Wrapper for the JSON string representation of a data structure. This class exists to
-* allow objects to be converted into JSON, attached to another data structure, and not
-* re-encoded.
-*/
-case class JsonQuoted(body: String) {
-  override def toString = body
-}
 
-/**
-* Natively supported scalar types are: Boolean, Int, Long, String.
-* Collections are Sequence[T], Map[String, T] where T includes the scalars defined above, or
-* recursive Sequence or Map.
-*/
+// Natively supported scalar types are: Boolean, Int, Long, String.
+// Collections are Sequence[T], Map[String, T] where T includes the scalars defined above, or
+// recursive Sequence or Map.
 object Json {
-  /**
-  * Quote a string according to "JSON rules".
-  */
+  // Quote a string according to "JSON rules".
   def quote(s: String) = {
     def escapedChar(codePoint: Int): String = {
       codePoint match {
@@ -165,30 +144,68 @@ object Json {
     "\"%s\"".format(escaped.mkString)
   }
 
-  /**
-* Returns a JSON representation of the given object, as a JsonQuoted object.
-*/
-  def build(obj: Any): JsonQuoted = {
-    val rv = obj match {
-      case JsonQuoted(body) => body
-      case null => "null"
-      case x: Boolean => x.toString
-      case x: Number => x.toString
-      case array: Array[_] => array.map(build(_).body).mkString("[", ",", "]")
-      case set: Set[_] => set.toSeq.map(build(_).body).mkString("[", ",", "]")
-      case list: Seq[_] => list.map(build(_).body).mkString("[", ",", "]")
-      case map: scala.collection.Map[_, _] =>
-        map.map { case (k, v) => quote(k.toString) + ":" + build(v).body }.mkString("{", ",", "}")
-      case x: JsonSerializable => x.toJson()
-      case x =>
-        quote(x.toString)
+  // Returns a JSON representation of the given object.
+  def build(topObject: Any): String = {
+    import scala.util.Properties.{ lineSeparator => nl }
+    val result = new StringBuilder
+
+    def buildItem(obj: Any, indent: Int): Unit = {
+      val prefix = " " * indent
+
+      def buildSeq(seq: Seq[Any]): Unit = {
+        result.append("[").append(nl)
+        if (seq.isEmpty)
+          result.append(nl)
+        else {
+          val commas =  (false :: List.fill(seq.size - 1)(true)).reverse
+          for ((value, comma) <- seq zip commas) {
+            result.append(prefix).append("  ")
+            buildItem(value, indent + 2)
+            if (comma)
+              result.append(",")
+            result.append(nl)
+          }
+        }
+        result.append(prefix).append("]")
+      }
+      
+      def buildMap(m: Map[String, Any]): Unit = {
+        result.append("{").append(nl)
+        if (m.isEmpty)
+          result.append(nl)
+        else {
+          val commas =  (false :: List.fill(m.size - 1)(true)).reverse
+          val names = m.keys.toList.sorted
+          for ((name, comma) <- names zip commas; value = m(name)) {
+            result.append(prefix).append("  ").append(quote(name)).append(": ")
+            buildItem(value, indent + 2)
+            if (comma)
+              result.append(",")
+            result.append(nl)
+          }
+        }
+        result.append(prefix).append("}")
+      }
+      
+      obj match {
+        case null            => result.append("null")
+        case x: Boolean      => result.append(x.toString)
+        case x: Number       => result.append(x.toString)
+        case array: Array[_] => buildSeq(array.toSeq)
+        case set: Set[_]     => buildSeq(set.toSeq)
+        case list: Seq[_]    => buildSeq(list)
+        case map: Map[_, _]  => buildMap(map.map { t => (t._1.toString, t._2) })
+        case x               => result.append(quote(x.toString))
+      }
+      
     }
-    JsonQuoted(rv)
+    
+    buildItem(topObject, 0)
+    result.append(nl).toString
   }
 
-/**
-* Parses a JSON String representation into its native Scala reprsentation.
-*/
+
+  // Parses a JSON String representation into its native Scala reprsentation.
   def parse(s: String): Any = (new JsonParser).parse(s)
 }
 
