@@ -47,10 +47,10 @@ object SavedGame {
     catch {
       case e: IOException =>
         val suffix = if (e.getMessage == null) "" else s": ${e.getMessage}"
-        println(s"IO Error writing game file ($filepath)$suffix")
+        println(s"IO Error writing saved game ($filepath)$suffix")
       case e: Throwable =>
         val suffix = if (e.getMessage == null) "" else s": ${e.getMessage}"
-        println(s"Error writing save game ($filepath)$suffix")
+        println(s"Error writing saved game ($filepath)$suffix")
     }
   }
   
@@ -61,11 +61,11 @@ object SavedGame {
     catch {
       case e: IOException =>
         val suffix = if (e.getMessage == null) "" else s": ${e.getMessage}"
-        println(s"IO Error reading game file ($filepath)$suffix")
+        println(s"IO Error reading saved game ($filepath)$suffix")
         sys.exit(1)
       case e: Throwable =>
         val suffix = if (e.getMessage == null) "" else s": ${e.getMessage}"
-        println(s"Error reading save game ($filepath)$suffix")
+        println(s"Error reading saved game ($filepath)$suffix")
         sys.exit(1)
     }
   }
@@ -88,14 +88,14 @@ object SavedGame {
     case _      => throw new Exception(s"Not a valid List value!")
   }  
   
-  private def buildGameParameters(params: GameParameters): Map[String, Any] =
+  private def gameParametersToMap(params: GameParameters): Map[String, Any] =
     Map(
       "scenarioName"     -> params.scenarioName,
       "finalPropSupport" -> params.finalPropSupport,
       "botDebug"         -> params.botDebug
     )
   
-  private def assembleGameParameters(data: Map[String, Any]): GameParameters = {
+  private def gameParametersFromMap(data: Map[String, Any]): GameParameters = {
     GameParameters(
       asString(data("scenarioName")),
       asBoolean(data("finalPropSupport")),
@@ -103,7 +103,7 @@ object SavedGame {
     )
   }
   
-  private def buildSequenceOfPlay(seq: SequenceOfPlay): Map[String, Any] =
+  private def sequenceOfPlayToMap(seq: SequenceOfPlay): Map[String, Any] =
     Map(
       "firstEligible"  -> seq.firstEligible,
       "secondEligible" -> seq.secondEligible,
@@ -111,7 +111,7 @@ object SavedGame {
       "secondAction"   -> (seq.secondAction getOrElse null)
     )
   
-  private def assembleSequenceOfPlay(data: Map[String, Any]): SequenceOfPlay = {
+  private def sequenceOfPlayFromMap(data: Map[String, Any]): SequenceOfPlay = {
     SequenceOfPlay(
       Role(asString(data("firstEligible"))),
       Role(asString(data("secondEligible"))),
@@ -120,7 +120,7 @@ object SavedGame {
     )
   }
   
-  private def buildPieces(pieces: Pieces): Map[String, Any] =
+  private def piecesToMap(pieces: Pieces): Map[String, Any] =
     Map(
       "frenchTroops"     -> pieces.frenchTroops,
       "frenchPolice"     -> pieces.frenchPolice,
@@ -132,7 +132,7 @@ object SavedGame {
       "flnBases"         -> pieces.flnBases
     )
   
-  private def assemblePieces(data: Map[String, Any]): Pieces = {
+  private def piecesFromMap(data: Map[String, Any]): Pieces = {
     Pieces(
       asInt(data("frenchTroops")),
       asInt(data("frenchPolice")),
@@ -145,7 +145,7 @@ object SavedGame {
     )
   }
   
-  private def buildSpace(sp: Space): Map[String, Any] =
+  private def spaceToMap(sp: Space): Map[String, Any] =
     Map(
       "name"      -> sp.name,
       "spaceType" -> sp.spaceType,
@@ -154,11 +154,11 @@ object SavedGame {
       "basePop"   -> sp.basePop,
       "coastal"   -> sp.coastal,
       "support"   -> sp.support,
-      "pieces"    -> buildPieces(sp.pieces),
+      "pieces"    -> piecesToMap(sp.pieces),
       "markers"   -> sp.markers
     )
   
-  private def assembleSpace(data: Map[String, Any]): Space = {
+  private def spaceFromMap(data: Map[String, Any]): Space = {
     Space(
       asString(data("name")),
       SpaceType(asString(data("spaceType"))),
@@ -167,7 +167,7 @@ object SavedGame {
       asInt(data("basePop")),
       asBoolean(data("coastal")),
       SupportValue(asString(data("support"))),
-      assemblePieces(asMap(data("pieces"))),
+      piecesFromMap(asMap(data("pieces"))),
       asList(data("markers")) map (_.toString)
     )
   }
@@ -175,18 +175,18 @@ object SavedGame {
   
   private def toGameJson(gameState: GameState): String = {
     val top = Map(
-      "params"                  -> buildGameParameters(gameState.params),
+      "params"                  -> gameParametersToMap(gameState.params),
       "turn"                    -> gameState.turn,
       "numberOfPropCards"       -> gameState.numberOfPropCards,
-      "spaces"                  -> (gameState.spaces map buildSpace),
+      "spaces"                  -> (gameState.spaces map spaceToMap),
       "franceTrack"             -> gameState.franceTrack,
       "borderZoneTrack"         -> gameState.borderZoneTrack,
       "commitment"              -> gameState.commitment,
       "gov_resources"           -> gameState.resources.gov,
       "fln_resources"           -> gameState.resources.fln,
-      "outOfPlay"               -> buildPieces(gameState.outOfPlay),
-      "casualties"              -> buildPieces(gameState.casualties),
-      "sequence"                -> buildSequenceOfPlay(gameState.sequence),
+      "outOfPlay"               -> piecesToMap(gameState.outOfPlay),
+      "casualties"              -> piecesToMap(gameState.casualties),
+      "sequence"                -> sequenceOfPlayToMap(gameState.sequence),
       "capabilities"            -> gameState.capabilities,
       "momentum"                -> gameState.momentum,
       "currentCard"             -> (gameState.currentCard getOrElse null),
@@ -203,17 +203,17 @@ object SavedGame {
   private def fromGameJson(jsonValue: String): GameState = {
     val top = asMap(Json.parse(jsonValue))
     GameState(
-      assembleGameParameters(asMap(top("params"))),
+      gameParametersFromMap(asMap(top("params"))),
       asInt(top("turn")),
       asInt(top("numberOfPropCards")),
-      asList(top("spaces")) map (s => assembleSpace(asMap(s))),
+      asList(top("spaces")) map (s => spaceFromMap(asMap(s))),
       asInt(top("franceTrack")),
       asInt(top("borderZoneTrack")),
       asInt(top("commitment")),
       Resources(asInt(top("gov_resources")), asInt(top("fln_resources"))),
-      assemblePieces(asMap(top("outOfPlay"))),
-      assemblePieces(asMap(top("casualties"))),
-      assembleSequenceOfPlay(asMap(top("sequence"))),
+      piecesFromMap(asMap(top("outOfPlay"))),
+      piecesFromMap(asMap(top("casualties"))),
+      sequenceOfPlayFromMap(asMap(top("sequence"))),
       asList(top("capabilities")) map (_.toString),
       asList(top("momentum")) map (_.toString),
       if (top("currentCard") == null) None else Some(asInt(top("currentCard"))),
