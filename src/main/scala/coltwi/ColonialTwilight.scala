@@ -833,6 +833,10 @@ object ColonialTwilight {
       val b = new ListBuffer[String]
       b += s"Scenario: ${params.scenarioName}"
       b += separator()
+      if (game.params.finalPropSupport) {
+        b += "Optional Rules:"
+        b += "8.5.1 - Conduct Support Phase in final Propaganda round"
+      }
       b.toList
     }
     
@@ -1870,14 +1874,14 @@ object ColonialTwilight {
   }
   
   
-  def initialGameState(scenario: Scenario) = {
+  def initialGameState(scenario: Scenario, finalSupport: Boolean) = {
     var spaces = DefaultSpaces
     // Apply scenario overrides to countries.
     for (sp <- scenario.spaces)
       spaces = sp :: (spaces filterNot (_.name == sp.name))
     
     GameState(
-      GameParameters(scenario.name),
+      GameParameters(scenario.name, finalSupport),
       0, // Turn number, zero indicates start of game.
       scenario.numberOfPropCards,
       spaces,
@@ -1926,9 +1930,18 @@ object ColonialTwilight {
             }
           }
           val scenario = scenarios(scenarioName)
+          
+          val choices = List(
+            false -> "Standard Rules      - No Support Phase in final Propaganda round",
+            true  -> "Optional Rule 8.5.1 - Conduct Support Phase in final Propaganda round")
+          println()
+          println("Choose one:")
+          val finalSupport = askMenu(choices, allowAbort = false).head
+          
+          println()
           gameName = Some(askGameName("Enter a name for your new game: "))
 
-          game = initialGameState(scenario)
+          game = initialGameState(scenario, finalSupport)
           logSummary(game.scenarioSummary)
           log()
           scenario.additionalSetup()
