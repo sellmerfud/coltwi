@@ -2374,7 +2374,7 @@ object ColonialTwilight {
   }
   
   def resolvePropagandaCard(): Unit = {
-    val finalPropRound = true // game.propCardsPlayed == game.numberOfPropCards
+    val finalPropRound = game.propCardsPlayed == game.numberOfPropCards
     def logGameOver(): Unit = {
       // FLN wins ties
       val winner = if (!finalPropRound || game.flnMargin >= game.govMargin) Fln else Gov
