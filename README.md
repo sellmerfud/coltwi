@@ -19,7 +19,7 @@ There are two scripts provided that will start the program.
 
 ## Downloading the package
 
-You can download the zip file with the latest release (version 2.1) [here][1]
+You can download the zip file with the latest release (version 2.2) [here][1]
 
 If you are upgrading to a newer version and the **major** version numbers of the two versions
 are the same, then any saved games in progress will be compatible.
@@ -28,7 +28,7 @@ Simply copy the *games* folder from the older *coltwi-x.x* directory to the
 new *coltwi-x.x* directory.
 
 
-[1]: https://www.dropbox.com/s/3ead5dyuatlw9nb/coltwi-2.1.zip?dl=0
+[1]: https://www.dropbox.com/s/0zzi75mv0d9p2wa/coltwi-2.2.zip?dl=0
 
 ## Using the program
 
