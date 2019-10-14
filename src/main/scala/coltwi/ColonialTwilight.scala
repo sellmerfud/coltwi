@@ -2073,7 +2073,7 @@ object ColonialTwilight {
           else
             name
         case name => 
-          println("Game names must consist of one or more letters, numbers, spaces, dashes or undercores")
+          println("The name must consist of one or more letters, numbers, spaces, dashes or undercores")
           getName
       }
     }
