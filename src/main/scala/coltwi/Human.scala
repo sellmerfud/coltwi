@@ -98,8 +98,10 @@ object Human {
   def checkPeaceOfTheBrave(spaceName: String): Unit = {
     val sp = game.getSpace(spaceName)
     val prompt = s"\nDo you wish pay 1 resource to remove 1 guerrilla from $spaceName (y/n) "
-    if (momentumInPlay(MoPeaceOfTheBrave) && game.resources(Gov) > 0 && sp.totalGuerrillas > 0 && askYorN(prompt))
+    if (momentumInPlay(MoPeaceOfTheBrave) && game.resources(Gov) > 0 && sp.totalGuerrillas > 0 && askYorN(prompt)) {
+      decreaseResources(Gov, 1)
       removeToAvailable(spaceName, askPieces(sp.pieces, 1, GUERRILLAS))
+    }
   }
     
   sealed trait GovOp {
@@ -252,8 +254,10 @@ object Human {
         }
       }
     
-      println(s"\nYou may pacify in up to ${maxSpaces} of the training spaces")
-      nextPacify(0, candidateSpaces)
+      if (candidateSpaces.nonEmpty) {
+        println(s"\nYou may pacify in up to ${maxSpaces} of the training spaces")
+        nextPacify(0, candidateSpaces)
+      }
     } 
   }
   
@@ -539,8 +543,8 @@ object Human {
               log(s"$Gov executes Assault operation: $spaceName")
               if (!params.free)
                 decreaseResources(Gov, costPerSpace)
-              removeLosses(spaceName, flnLosses(game.getSpace(spaceName)))
               checkPeaceOfTheBrave(spaceName)
+              removeLosses(spaceName, flnLosses(game.getSpace(spaceName)))
               assaultSpaces += spaceName
             }
             nextChoice()
