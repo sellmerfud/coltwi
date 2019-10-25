@@ -48,7 +48,7 @@ object Cards {
   
   val leadershipSnatch = (sp: Space) => sp.population > 0 && sp.isFlnControlled && !sp.isOppose
   
-  val fifthBureau = (sp: Space) => sp.population > 0 && !sp.isOppose
+  val fifthBureau = (sp: Space) => sp.isSector && sp.population > 0 && !sp.isOppose
   
   val beniOuiOui = (sp: Space) => sp.terror == 0 && sp.isNeutral
   
