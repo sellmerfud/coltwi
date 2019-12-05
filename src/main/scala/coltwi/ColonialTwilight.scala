@@ -470,6 +470,32 @@ object ColonialTwilight {
     }
   }
   
+  // In Wilaya order, Cities first within the Wilaya.
+  // Morocco and Tunisia last
+  implicit val SpaceOrdering = new Ordering[Space] {
+    private val SECTOR = """([^-]+)-(\d+)""".r
+    
+    def roman(x: String) = x match {
+      case "VI" => 6
+      case "V"  => 5
+      case "IV" => 4
+      case x    => x.length
+    }
+    
+    def weight(s: Space) = s.name match {
+      case Morocco => 100
+      case Tunisia => 200
+      case _ =>
+        s.zone match {
+          case SECTOR(z, n) => roman(z) * 10 + n.toInt
+          case z            => roman(z) * 10 // city
+        }
+    }
+    
+    def compare(x: Space, y: Space) = weight(x) compare weight(y)
+  }
+  
+  
   case class Space(
     name:           String,
     spaceType:      SpaceType,   // City, Sector, Country
@@ -2686,7 +2712,8 @@ object ColonialTwilight {
     printSummary(game.outOfPlaySummary)
     printSummary(game.eventSummary)
     printSummary(game.sequenceSummary)
-    for (name <- SpaceNames; line <- game.spaceSummary(name))
+         
+    for (sp <- game.spaces.sorted; line <- game.spaceSummary(sp.name))
       println(line)
   }
   
