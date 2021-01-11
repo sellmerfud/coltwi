@@ -17,3 +17,9 @@ package VERSION:
     echo target/$PKG does not exist
     exit 1
   fi
+
+@setvers VERSION:
+  ruby -p -i -e 'gsub(/(version\s*:=\s*)("\d+\.\d+")/, "\\1\"{{VERSION}}\"")' build.sbt
+  ruby -p -i -e 'gsub(/coltwi_2.11-(\d+\.\d+)\.jar/, "coltwi_2.11-{{VERSION}}.jar")' src/other/coltwi src/other/coltwi.cmd
+
+  
