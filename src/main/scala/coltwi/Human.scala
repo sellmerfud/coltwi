@@ -507,7 +507,8 @@ object Human {
         (maxLosses - numGuerrillas) min sp.flnBases
       Pieces(activeGuerrillas = numGuerrillas, flnBases = numBases)
     }
-    val assaultFilter = (sp: Space) => flnLosses(sp).total > 0
+    val assaultFilter = (sp: Space) => flnLosses(sp).total > 0 || 
+                                        (momentumInPlay(MoPeaceOfTheBrave) && sp.totalGuerrillas > 0)
     val costPerSpace = if (capabilityInPlay(CapScorch)) 3 else 2
     
     override def execute(params: Params): Int = {
