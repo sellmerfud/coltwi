@@ -378,17 +378,21 @@ object Human {
     def movableTroops(sp: Space) = sp.totalTroops - movingGroups(sp.name).totalTroops
     // Return adjacent spaces that contains movable troops
     def sourceSpaces(sp: Space) = spaceNames(spaces(getAdjacent(sp.name)) filter (movableTroops(_) > 0))
-    def guerrillasActivated(sp: Space) = if (sp.isMountains)
+    def guerrillasActivated(sp: Space) = if (sp.isMountains) {
       if (capabilityInPlay(CapGovCommandos))
         (sp.algerianCubes + (sp.frenchCubes / 2)) min sp.hiddenGuerrillas
       else
-        (sp.totalCubes / 2) min sp.hiddenGuerrillas
+        (sp.totalCubes / 2) min sp.hiddenGuerrillas      
+    }
     else
       sp.totalCubes min sp.hiddenGuerrillas
-    val sweepFilter = (sp: Space) => guerrillasActivated(sp) > 0 || sourceSpaces(sp).nonEmpty
+    
+    val sweepFilter = (sp: Space) => sp.hiddenGuerrillas > 0 || sourceSpaces(sp).nonEmpty
     
     override def execute(params: Params): Int = {
       var sweepSpaces = Set.empty[String]
+      var activatedSpaces = Set.empty[String]
+      var finishedSelectingSweeps = false
       
       def nextChoice(): Unit = {
         val sweepCandidates: Set[String] = if (game.resources(Gov) < 2 && !params.free)
@@ -399,17 +403,28 @@ object Human {
             case _  => validSpaces(params)(sweepFilter) -- sweepSpaces
           }
         
+        val activateSpaces = sweepSpaces.toList.sorted filter { name =>
+          !(activatedSpaces contains name) && guerrillasActivated(game.getSpace(name)) > 0
+        }
+        val canSweep    = !finishedSelectingSweeps && sweepCandidates.nonEmpty
+        val canActivate = finishedSelectingSweeps && activateSpaces.nonEmpty
+        
         val choices = List(
-          choice(sweepCandidates.nonEmpty, "sweep",   s"Select a sweep space"),
-          choice(specialActivity.allowed,  "special", s"Perform a special activity"),
-          choice(true,                     "done",    s"Finished selecting sweep spaces"),
-          choice(true,                     "abort",   s"Abort the entire $Gov turn")
+          choice(canSweep,                 "sweep",      s"Select a sweep space"),
+          choice(canActivate,              "activate",   s"Activate guerrillas in a sweep space"),
+          choice(!finishedSelectingSweeps, "stopSelect", s"Finished selecting sweep spaces"),
+          choice(specialActivity.allowed,  "special",    s"Perform a special activity"),
+          choice(!canSweep && !canActivate,"done",       s"Complete the $Gov turn"),
+          choice(true,                     "abort",      s"Abort the entire $Gov turn")
         ).flatten
       
         println("\n")
         println(s"$Gov Sweep operation")
         println(separator(char = '='))
-        wrap("Spaces swept: ", sweepSpaces.toList.sorted) foreach println
+        wrap("Sweep spaces: ", sweepSpaces.toList.sorted) foreach println
+        if (finishedSelectingSweeps)
+          wrap("Activated guerrillas in: ", activatedSpaces.toList.sorted) foreach println
+        
         println(s"\nChoose one:")
         askMenu(choices, allowAbort = false).head match {
           case "sweep" =>
@@ -419,6 +434,17 @@ object Human {
             }
             nextChoice()
           
+          case "activate" =>
+            askCandidateAllowNone(s"\nChoose space to activate guerrillas: ", activateSpaces.sorted) foreach { spaceName =>
+              activateHiddenGuerrillas(spaceName, guerrillasActivated(game.getSpace(spaceName)))
+              activatedSpaces += spaceName
+            }
+            nextChoice()
+            
+          case "stopSelect" =>
+            finishedSelectingSweeps = true
+            nextChoice()
+            
           case "special" =>
             executeSpecialActivity(TroopLift::Neutralize::Nil, params)
             nextChoice()
@@ -426,16 +452,13 @@ object Human {
           case "abort" =>
             if (askYorN("Really abort? (y/n) ")) throw AbortAction
             nextChoice()
-          
-          case "done" =>
+                      
+          case _ => // done
         }
       }
     
       nextChoice()
-      for (name <- sweepSpaces.toList.sorted)
-        activateHiddenGuerrillas(name, guerrillasActivated(game.getSpace(name)))
-      if (specialActivity.allowed && askYorN("\nPerform a special activity? (y/n) "))
-        executeSpecialActivity(TroopLift::Neutralize::Nil, params)
+      
       sweepSpaces.size
     }
     
