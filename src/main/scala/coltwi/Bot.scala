@@ -872,8 +872,8 @@ object Bot {
       var reservedResources = 0
       val maxTotalRallies = (turnState.maxSpaces, game.resources(Fln)) match {
         case (Some(n), _) => n
-        case (None, res) if res < 9 => 1000 // No limit
-        case (None, res) => res * 2 / 3
+        case (None, res) if res < 9 => 6 // No resource spending limit
+        case (None, res) => (res * 2 / 3) max 6
       }
       
       def numRallies  = rallySpaces.size + (if (shiftedFranceTrack) 1 else 0)
