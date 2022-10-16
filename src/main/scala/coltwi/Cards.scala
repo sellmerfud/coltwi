@@ -66,9 +66,9 @@ object Cards {
     Bot.getGuerrillasToPlace(sp.algerianPolice, sp).total > 0
   }
   
-  val thirdForceCriteria = (sp: Space) => sp.isSector && sp.algerianPolice > 0 && !sp.isOppose
+  val thirdForceCriteria = (sp: Space) => sp.isSector && sp.population > 0 && sp.algerianPolice > 0 && !sp.isOppose
   
-  val stripeyHoleUnshaded = (sp: Space) => sp.isSector && !sp.isOppose && sp.flnBases > 0
+  val stripeyHoleUnshaded = (sp: Space) => sp.isSector && sp.population > 0 && !sp.isOppose && sp.flnBases > 0
 
   val stripeyHoleShaded = (sp: Space) => {
     val haveAvail = Bot.getGuerrillasToPlace(2, sp).total > 0
