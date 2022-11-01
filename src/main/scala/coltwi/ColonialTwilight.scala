@@ -1059,7 +1059,7 @@ object ColonialTwilight {
     }
     
     for (name <- spaceNames(from.spaces).sorted) {
-      b.clear
+      b.clear()
       val (fromSp, toSp) = (from.getSpace(name), to.getSpace(name))
       showMarker("Support marker", fromSp.support, toSp.support)
       showMarker("Control marker", fromSp.control, toSp.control)
@@ -1073,9 +1073,9 @@ object ColonialTwilight {
     }
   }
   
-  def spaceNames(spaces: Traversable[Space]): List[String] = (spaces map (_.name)).toList.sorted
+  def spaceNames(spaces: Iterable[Space]): List[String] = (spaces map (_.name)).toList.sorted
   
-  def spaces(names: Traversable[String]): List[Space] = (names map game.getSpace).toList.sortBy(_.name)
+  def spaces(names: Iterable[String]): List[Space] = (names map game.getSpace).toList.sortBy(_.name)
   
   def capabilityInPlay(cap: String) = game.capabilities contains cap
   
@@ -1578,7 +1578,7 @@ object ColonialTwilight {
                 case 1 => println(s"\nThere is only 1 ${pieceType.singular} in the available box")
                 case n => println(s"\nThere are only ${amtPiece(n, pieceType)} in the available box")
               }
-              println
+              println()
               if (askYorN("Do you wish to voluntarily remove pieces to make up the difference? (y/n) ")) {
                 val numToRemove = askInt("How many pieces do you wish to remove from the map", 0, num - numAvail)
                 voluntaryRemoval(numToRemove, pieceType, Set(spaceName))
@@ -1850,7 +1850,7 @@ object ColonialTwilight {
           s.append(v)
         else {
           b += s.toString
-          s.clear
+          s.clear()
           s.append(margin).append(v)
         }
       }
@@ -1859,7 +1859,7 @@ object ColonialTwilight {
     b.toList
   }
   
-  def pause() {
+  def pause(): Unit = {
     import scala.util.Properties.isWin
     if (isWin)
       readLine("Press Enter to continue... ")

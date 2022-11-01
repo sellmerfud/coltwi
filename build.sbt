@@ -7,7 +7,7 @@ import java.util.HashSet
 lazy val commonSettings = Seq(
   organization := "org.sellmerfud",
   version      := "2.7",
-  scalaVersion := "2.11.11"
+  scalaVersion := "2.13.10"
 )
 
 lazy val stage = taskKey[Unit]("Create distribution zip file")
@@ -19,7 +19,7 @@ lazy val coltwi = (project in file("."))
     description := "A scala implementation of the solo AI for Colonial Twilight",
     scalacOptions       ++= Seq( "-deprecation", "-unchecked", "-feature" ),
     libraryDependencies ++= Seq(
-      "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
+      "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
     ),
     // Task to create the distribution zip file
     // To create a zip file that is readable on windoze

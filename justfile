@@ -20,6 +20,6 @@ package VERSION:
 
 @setvers VERSION:
   ruby -p -i -e 'gsub(/(version\s*:=\s*)("\d+\.\d+")/, "\\1\"{{VERSION}}\"")' build.sbt
-  ruby -p -i -e 'gsub(/coltwi_2.11-(\d+\.\d+)\.jar/, "coltwi_2.11-{{VERSION}}.jar")' src/other/coltwi src/other/coltwi.cmd
+  ruby -p -i -e 'gsub(/coltwi_2.13-(\d+\.\d+)\.jar/, "coltwi_2.13-{{VERSION}}.jar")' src/other/coltwi src/other/coltwi.cmd
 
   
