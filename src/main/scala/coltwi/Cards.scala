@@ -1663,7 +1663,7 @@ object Cards {
         // Plague on both your houses: Until Propaganda round:
         // - Government may not Train in a Sector without Support.
         // - FLN may not Extort in a sector without a base.
-        playMomentum(MoHardendAttitudes)
+        playMomentum(MoHardenedAttitudes)
       },
       (role: Role) => () // Single event
     )),

@@ -433,7 +433,7 @@ object Bot {
     
     val primary = (game.algerianSpaces filter { sp =>
       sp.population > 0  &&
-      (!momentumInPlay(MoHardendAttitudes) || !sp.isSector ||sp.flnBases > 0) &&
+      (!momentumInPlay(MoHardenedAttitudes) || !sp.isSector ||sp.flnBases > 0) &&
       sp.isFlnControlled && (
         (sp.flnBases > 0 && sp.totalCubes > 0 && sp.hiddenGuerrillas > (2 + protectedGs(sp.name))) ||
         ((sp.flnBases == 0 || sp.totalCubes == 0) && sp.hiddenGuerrillas > (1 + protectedGs(sp.name)))
@@ -446,7 +446,7 @@ object Bot {
       !primaryNames(sp.name)     &&
       sp.isFlnControlled         && 
       hasSafeHiddenGuerrilla(sp) && 
-      (!momentumInPlay(MoHardendAttitudes) || !sp.isSector || sp.flnBases > 0))
+      (!momentumInPlay(MoHardenedAttitudes) || !sp.isSector || sp.flnBases > 0))
     
     if (primary.nonEmpty || (game.resources(Fln) == 0 && secondary.nonEmpty)) {
       turnState = turnState.copy(specialActivityTaken = true)

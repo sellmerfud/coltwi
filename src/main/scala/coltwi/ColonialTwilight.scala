@@ -264,13 +264,13 @@ object ColonialTwilight {
   val MoChallePlanFln        = "FLN: Challe Plan"
   val MoMoghazni             = "Gov: Moghazni"
   val MoPopulationControl    = "Gov: Population Control"
-  val MoHardendAttitudes     = "Dual: Hardend Attitudes"
+  val MoHardenedAttitudes    = "Dual: Hardened Attitudes"
   val MoPeaceTalks           = "Dual: Peace Talks"
 
   val AllMomentum = List(
     MoBalkyConscripts, MoPeaceOfTheBrave, MoCrossBorderAirStrike, MoMoudjahidine, MoBananes,
     MoVentilos, MoTheCallUp, MoIntimidation, MoStrategicMovement, MoParanoia, MoChallePlanGov,
-    MoChallePlanFln, MoMoghazni, MoPopulationControl, MoHardendAttitudes, MoPeaceTalks)
+    MoChallePlanFln, MoMoghazni, MoPopulationControl, MoHardenedAttitudes, MoPeaceTalks)
   
   sealed trait PieceType {
     val singular: String
@@ -576,7 +576,7 @@ object ColonialTwilight {
     def sweepHasEffect = pieces.hiddenGuerrillas > 0 &&
                          ((isMountains && pieces.totalCubes > 1) || (pieces.totalCubes > 0))
                        
-    def prohibitedTrainSector = momentumInPlay(MoHardendAttitudes) && isSector && !isSupport  
+    def prohibitedTrainSector = momentumInPlay(MoHardenedAttitudes) && isSector && !isSupport  
     
     def normalTrain         = isCity || hasGovBase
     def recallDeGaulleTrain = game.recallDeGaulleInEffect && isGovControlled && pieces.totalTroops > 0 && pieces.totalPolice > 0

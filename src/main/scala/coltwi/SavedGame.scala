@@ -201,6 +201,15 @@ object SavedGame {
   }
   
   private def fromGameJson(jsonValue: String): GameState = {
+    //  These momentum cards had typos in the name.
+    //  Fix them when loading in case we are loading from a save
+    //  file that was saved with the incorrect name
+    val fixMomentumTypos = (name: String) => name match {
+      case "Dual: Hardend Attitudes" => "Dual: Hardened Attitudes"
+      case n => n
+    }
+      
+    
     val top = asMap(Json.parse(jsonValue))
     GameState(
       gameParametersFromMap(asMap(top("params"))),
@@ -215,7 +224,7 @@ object SavedGame {
       piecesFromMap(asMap(top("casualties"))),
       sequenceOfPlayFromMap(asMap(top("sequence"))),
       asList(top("capabilities")) map (_.toString),
-      asList(top("momentum")) map (_.toString),
+      asList(top("momentum")) map (_.toString) map fixMomentumTypos,
       if (top("currentCard") == null) None else Some(asInt(top("currentCard"))),
       if (top("previousCard") == null) None else Some(asInt(top("previousCard"))),
       asInt(top("propCardsPlayed")),
