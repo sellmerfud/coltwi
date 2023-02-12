@@ -36,13 +36,15 @@ package coltwi
 import java.io.IOException
 import FUtil.Pathname
 import ColonialTwilight.{ GameState, GameParameters, SequenceOfPlay, Space, Pieces, Role, Action,
-                          SpaceType, Terrain, SupportValue, Resources }
+                          SpaceType, Terrain, SupportValue, Resources, SOFTWARE_VERSION }
 
 object SavedGame {
+  val CurrentFileVersion = 1
+  
   def save(filepath: Pathname, gameState: GameState): Unit = {
     try {
       filepath.dirname.mkpath() // Make sure that the game directory exists
-      filepath.writeFile(toGameJson(gameState))
+      filepath.writeFile(toJson(gameState))
     }
     catch {
       case e: IOException =>
@@ -54,10 +56,19 @@ object SavedGame {
     }
   }
   
+  private def toJson(gameState: GameState): String = {
+    val top = Map(
+      "file-version"     -> CurrentFileVersion,
+      "software-version" -> SOFTWARE_VERSION,
+      "game-state"       -> gameStateToMap(gameState)
+    )
+    Json.build(top)
+  }
+  
   // The path should be the full path to the file to load.
   // Will set the game global variable
   def load(filepath: Pathname): GameState = {
-    try fromGameJson(filepath.readFile())
+    try fromJson(filepath.readFile())
     catch {
       case e: IOException =>
         val suffix = if (e.getMessage == null) "" else s": ${e.getMessage}"
@@ -69,6 +80,27 @@ object SavedGame {
         sys.exit(1)
     }
   }
+  
+  private def fromJson(jsonValue: String): GameState = {
+    val top = asMap(Json.parse(jsonValue))
+    //  The file-version started with version 1
+    //  If this is missing, then it is an older file
+    //  with no file-version, ie verion zero
+    if (top.contains("file-version")) {
+      if (!top.contains("game-state"))
+        throw new IllegalArgumentException(s"Invalid save file - No game-state")
+      
+      asInt(top("file-version")) match {
+        case 1 => gameFromVersion1(asMap(top("game-state")))
+        case v => throw new IllegalArgumentException(s"Invalid save file version: $v")
+      }
+    }
+    else {
+      //  In version zero the game state was at the top level of the json
+      gameFromVersionZero(top)
+    }
+  }
+    
     
   private def asString(x: Any): String = x.toString
   private def asBoolean(x: Any): Boolean = x match {
@@ -173,8 +205,8 @@ object SavedGame {
   }
   
   
-  private def toGameJson(gameState: GameState): String = {
-    val top = Map(
+  private def gameStateToMap(gameState: GameState): Map[String, Any] = {
+    Map(
       "params"                  -> gameParametersToMap(gameState.params),
       "turn"                    -> gameState.turn,
       "numberOfPropCards"       -> gameState.numberOfPropCards,
@@ -197,10 +229,13 @@ object SavedGame {
       "recallDeGaulleCancelled" -> gameState.recallDeGaulleCancelled,
       "history"                 -> gameState.history
     )
-    Json.build(top)
   }
   
-  private def fromGameJson(jsonValue: String): GameState = {
+  //  Version 1 game state is in the same foremat as version zero
+  //  (It was just down one level from the top meta dat)
+  private def gameFromVersion1(data: Map[String, Any]): GameState = gameFromVersionZero(data)
+  
+  private def gameFromVersionZero(data: Map[String, Any]): GameState = {
     //  These momentum cards had typos in the name.
     //  Fix them when loading in case we are loading from a save
     //  file that was saved with the incorrect name
@@ -208,31 +243,30 @@ object SavedGame {
       case "Dual: Hardend Attitudes" => "Dual: Hardened Attitudes"
       case n => n
     }
-      
     
-    val top = asMap(Json.parse(jsonValue))
     GameState(
-      gameParametersFromMap(asMap(top("params"))),
-      asInt(top("turn")),
-      asInt(top("numberOfPropCards")),
-      asList(top("spaces")) map (s => spaceFromMap(asMap(s))),
-      asInt(top("franceTrack")),
-      asInt(top("borderZoneTrack")),
-      asInt(top("commitment")),
-      Resources(asInt(top("gov_resources")), asInt(top("fln_resources"))),
-      piecesFromMap(asMap(top("outOfPlay"))),
-      piecesFromMap(asMap(top("casualties"))),
-      sequenceOfPlayFromMap(asMap(top("sequence"))),
-      asList(top("capabilities")) map (_.toString),
-      asList(top("momentum")) map (_.toString) map fixMomentumTypos,
-      if (top("currentCard") == null) None else Some(asInt(top("currentCard"))),
-      if (top("previousCard") == null) None else Some(asInt(top("previousCard"))),
-      asInt(top("propCardsPlayed")),
-      (asList(top("pivotalCardsPlayed")) map asInt).toSet,
-      asBoolean(top("coupdEtatPlayedOnce")),
-      asBoolean(top("recallDeGaulleCancelled")),
-      (asList(top("history")) map (_.toString)).toVector
+      gameParametersFromMap(asMap(data("params"))),
+      asInt(data("turn")),
+      asInt(data("numberOfPropCards")),
+      asList(data("spaces")) map (s => spaceFromMap(asMap(s))),
+      asInt(data("franceTrack")),
+      asInt(data("borderZoneTrack")),
+      asInt(data("commitment")),
+      Resources(asInt(data("gov_resources")), asInt(data("fln_resources"))),
+      piecesFromMap(asMap(data("outOfPlay"))),
+      piecesFromMap(asMap(data("casualties"))),
+      sequenceOfPlayFromMap(asMap(data("sequence"))),
+      asList(data("capabilities")) map (_.toString),
+      asList(data("momentum")) map (_.toString) map fixMomentumTypos,
+      if (data("currentCard") == null) None else Some(asInt(data("currentCard"))),
+      if (data("previousCard") == null) None else Some(asInt(data("previousCard"))),
+      asInt(data("propCardsPlayed")),
+      (asList(data("pivotalCardsPlayed")) map asInt).toSet,
+      asBoolean(data("coupdEtatPlayedOnce")),
+      asBoolean(data("recallDeGaulleCancelled")),
+      (asList(data("history")) map (_.toString)).toVector
     )
-  }
+  
+ }  
 }
 

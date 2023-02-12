@@ -2,7 +2,7 @@
 
 # This script will set the product version by modifying the appropriate source files
 # Then use sbt to build and stage the files for the new version
-# And finally zip up the results and copy the zip file to our ~/Dropbox/fitl directory
+# And finally zip up the results and copy the zip file to our ~/Dropbox/coltwi directory
 #
 # usage:
 # ./package.sh [<version>]
@@ -15,7 +15,7 @@ usage() {
   exit 1
 }
 
-BUILD_DIR=/Users/curt/dev/projects/fitl
+BUILD_DIR=/Users/curt/dev/projects/coltwi
 
 repo_dirty() {
   test -n "$(git status --porcelain)"
@@ -31,7 +31,7 @@ getYorN() {
     case "$response" in
       y*|Y*) return 0;;
       n*|N*) return 1;;
-      *) echo "Invalid resopnse"
+      *) echo "Invalid response"
     esac
   done
 }
