@@ -532,7 +532,7 @@ object Human {
     }
     val assaultFilter = (sp: Space) => flnLosses(sp).total > 0 || 
                                         (momentumInPlay(MoPeaceOfTheBrave) && sp.totalGuerrillas > 0)
-    val costPerSpace = if (capabilityInPlay(CapScorch)) 3 else 2
+    def costPerSpace = if (capabilityInPlay(CapScorch)) 3 else 2
     
     override def execute(params: Params): Int = {
       var assaultSpaces = Set.empty[String]
