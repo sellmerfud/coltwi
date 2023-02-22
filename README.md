@@ -9,7 +9,7 @@ You must have a copy of the board game in order to use this program.
 
 ## Downloading the package
 
-You can download the zip file with the latest release (version 2.8) [here][1]
+You can use this link to download the latest release: [Version 2.8][1]
 
 If you are upgrading to a newer version and the **major** version numbers of the two versions
 are the same, then any saved games in progress will be compatible.
