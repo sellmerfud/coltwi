@@ -30,10 +30,10 @@ repo_dirty() {
 getYorN() {
   local prompt="$1"
   local response
-  
+
   while true; do
-    printf "\n$prompt (y/n) "
-    read response
+    printf "\n%s (y/n) " "$prompt"
+    read -r response
     case "$response" in
       y*|Y*) return 0;;
       n*|N*) return 1;;
@@ -48,23 +48,24 @@ getYorN() {
 # zip file to Dropbox so that we can get its download URL. (see the update_readme() function)
 set_version() {
   local version=$1
-  
-  ruby -p -i -e 'gsub(/(version\s*:=\s*)("\d+\.\d+")/, "\\1\"'$version'\"")' build.sbt
-  ruby -p -i -e 'gsub(/'$jarfile_prefix'_2.13-(\d+\.\d+)\.jar/, "'$jarfile_prefix'_2.13-'$version'.jar")' src/other/$program_name src/other/$program_name.cmd
-  ruby -p -i -e 'gsub(/(val\s+SOFTWARE_VERSION\s*=\s*)("\d+\.\d+")/, "\\1\"'$version'\"")' ${main_class}
-  printf "Version set to $version\n"
+
+  ruby -p -i -e 'gsub(/(version\s*:=\s*)("\d+\.\d+")/, "\\1\"'"$version"'\"")' build.sbt
+  ruby -p -i -e 'gsub(/'"$jarfile_prefix"'_2.13-(\d+\.\d+)\.jar/, "'"$jarfile_prefix"'_2.13-'"$version"'.jar")' "src/other/$program_name" "src/other/$program_name.cmd"
+  ruby -p -i -e 'gsub(/(val\s+SOFTWARE_VERSION\s*=\s*)("\d+\.\d+")/, "\\1\"'"$version"'\"")' "$main_class"
+  printf "Version set to %s\n" "$version"
 }
 
 create_package() {
   local version=$1
 
   PKG=$program_name-$version
-  if [ -d target/$PKG ]; then
-    find target/$PKG -name .DS_Store -exec rm {} \+
-    rm -f target/${PKG}.zip
-    (cd target; zip -rq ${PKG}.zip $PKG)
+  if [ -d "target/$PKG" ]; then
+    find "target/$PKG" -name .DS_Store -exec rm {} \+
+    rm -f "target/$PKG.zip"
+    rm -fr "target/$PKG/games"  # Remove any games created during testing.
+    (cd target; zip -rq "$PKG.zip" "$PKG")
   else
-    printf "Target directory: 'target/$PKG' does not exist\n"
+    printf "Target directory: '%s' does not exist\n" "target/$PKG"
     exit 1
   fi
 }
@@ -76,7 +77,7 @@ commit_release() {
 
   git add  --update .
   git ci   -m"Update version number to $version"
-  git tag  -m"Release v$version" v$version
+  git tag  -m"Release v$version" "v$version"
   git push --tags origin master
 }
 
@@ -120,7 +121,7 @@ get_zipfile_url() {
   #        because we would lose the returned error code and would
   #        get the success error code from the 'local' function.
   access_token="$(get_access_token)"
-  
+
   # If the url already exists then an error object is returned with the url buried
   # several layers down.  Otherwise it is in the field .url at top level.
 
@@ -129,17 +130,17 @@ get_zipfile_url() {
       --header "Content-Type: application/json" \
       --data "{\"path\":\"${dropbox_zip_file_path}\"}" > $response
 
-  if fgrep --quiet '"shared_link_already_exists":' $response; then
+  if grep -F --quiet '"shared_link_already_exists":' $response; then
     jq '.error.shared_link_already_exists.metadata.url' $response | sd '^"|"$' ''
     result=0
-  elif fgrep --quiet '"error":' $response; then
+  elif grep -F --quiet '"error":' $response; then
     printf "Error getting zipfile url\n" >&2
     jq . $response >&2
   else
     jq '.url' $response | sd '^"|"$' ''
     result=0
   fi
-  
+
   rm -f $response
   return $result
 }
@@ -163,11 +164,11 @@ upload_zipfile() {
       --header "Content-Type: application/octet-stream" \
       --data-binary @"$local_zip_file_path"  >$response
 
-  if fgrep --quiet '"error":' $response; then
+  if grep -F --quiet '"error":' $response; then
     printf "Error uploading zip file\n" >&2
     jq . $response >&2
   else
-    printf "$local_zip_file_path copied to Dropbox\n"
+    printf "%s copied to Dropbox\n" "$local_zip_file_path"
     result=0
   fi
 
@@ -178,14 +179,14 @@ upload_zipfile() {
 # Update the README.md file with the new
 # version number and dropbox url
 update_readme() {
-  local version="$1"  
+  local version="$1"
   local zip_file_url=""
-  
-  zip_file_url="$(get_zipfile_url $version)"
-  
-  ruby -p -i -e 'gsub(/\[Version\s*\d+\.\d+\]/, "[Version '$version']")' \
+
+  zip_file_url="$(get_zipfile_url "$version")"
+
+  ruby -p -i -e 'gsub(/\[Version\s*\d+\.\d+\]/, "[Version '"$version"']")' \
              -e 'gsub(/^\[1\]:.*$/, "[1]: '"$zip_file_url"'")' README.md
-  
+
 }
 
 # Start of main script
@@ -197,12 +198,12 @@ case "$1" in
   --commit)
     shift
     ;;
-    
+
   -n|--no-commit)
     DO_COMMIT=no
     shift
     ;;
-    
+
   -*)
     usage
     ;;
@@ -210,18 +211,18 @@ esac
 
 # The deafault action if no paramter is given is to update the minor version number
 case "$1" in
-  "") 
+  "")
     NEW_VERSION=next_minor
     ;;
-    
+
   +([0-9]).+([0-9]))
     NEW_VERSION="$1"
     ;;
-  
+
   next_minor)
     NEW_VERSION=next_minor
     ;;
-  
+
   next_major)
     NEW_VERSION=next_major
     ;;
@@ -231,34 +232,35 @@ case "$1" in
     ;;
 esac
 
-  
+
 ## Set the current working directory to the parent directory of this script.
 ## (The top level working directory of the git repository)
 ## This is important because sbt' must be run from the top level directory
-cd $(dirname $0)/..
+cd "$(dirname "$0")/.."
 
-ID_FILE="$(dirname $0)/local_package_vars.sh"
+ID_FILE="$(dirname "$0")/local_package_vars.sh"
 [[ -f "$ID_FILE" ]] || {
-  printf "File not found: $ID_FILE\n"
+  printf "File not found: %s\n" "$ID_FILE"
   exit 1
 }
 
 # Sets the program_name and main_class variables
-source $ID_FILE
+# shellcheck source=/dev/null
+source "$ID_FILE"
 
 
-[[ -z ${program_name+x} ]] && {
-  printf "variable 'program_name' is not set in $ID_FILE\n"
+[[ -z ${program_name:+x} ]] && {
+  printf "variable 'program_name' is not set in %s\n" "$ID_FILE"
   exit 1
 }
 
-[[ -z ${main_class+x} ]] && {
-  printf "variable 'main_class' is not set in $ID_FILE\n"
+[[ -z ${main_class:+x} ]] && {
+  printf "variable 'main_class' is not set in %s\n" "$ID_FILE"
   exit 1
 }
 
-[[ -z ${jarfile_prefix+x} ]] && {
-  printf "variable 'jarfile_prefix' is not set in $ID_FILE\n"
+[[ -z ${jarfile_prefix:+x} ]] && {
+  printf "variable 'jarfile_prefix' is not set in %s\n" "$ID_FILE"
   exit 1
 }
 
@@ -268,16 +270,13 @@ source $ID_FILE
 main_class="${main_class%.scala}.scala"
 
 # Make sure we are on the master branch
-branch=$(git branch --show-current 2>/dev/null)
-
-if [[ $? -ne 0 ]]; then
+if ! branch=$(git branch --show-current 2>/dev/null); then
   printf "\Cannot determine the current branch!\n"
   exit 1
 elif [[ $branch != "master" ]]; then
   printf "Must be on 'master' branch to create the package.\n"
-  printf "Current branch is '$branch'"
+  printf "Current branch is '%s'" "$branch"
   exit 1
-  
 fi
 
 if repo_dirty; then
@@ -289,15 +288,15 @@ fi
 
 CURRENT_VERSION=$(grep '^\s*version' build.sbt | tr '"' , | cut -d, -f2)
 
-printf "\nCurrent version is $CURRENT_VERSION\n"
+printf "\nCurrent version is %s\n" "$CURRENT_VERSION"
 if [[ $CURRENT_VERSION =~ ^([[:digit:]]+)\.([[:digit:]]+)$ ]]; then
   MAJOR=${BASH_REMATCH[1]}
   MINOR=${BASH_REMATCH[2]}
-  
+
   case $NEW_VERSION in
     current   ) NEW_VERSION=$CURRENT_VERSION ;;
-    next_major) NEW_VERSION=$(($MAJOR + 1)).0 ;;
-    next_minor) NEW_VERSION=$MAJOR.$(($MINOR + 1)) ;;
+    next_major) NEW_VERSION=$(("$MAJOR" + 1)).0 ;;
+    next_minor) NEW_VERSION=$MAJOR.$(("$MINOR" + 1)) ;;
     *         ) ;; # NEW_VERSION was explicitly given as the argument
   esac
 else
@@ -305,9 +304,9 @@ else
   exit 1
 fi
 
-if [[ $CURRENT_VERSION != $NEW_VERSION ]]; then
+if [[ "$CURRENT_VERSION" != "$NEW_VERSION" ]]; then
   if getYorN "Set version to $NEW_VERSION and build package?"; then
-    set_version $NEW_VERSION
+    set_version "$NEW_VERSION"
   else
     exit 0
   fi
@@ -324,14 +323,14 @@ trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'printf "\"${last_command}\" command failed with exit code $?.\n"' EXIT
 
 sbt stage
-create_package $NEW_VERSION
-upload_zipfile $NEW_VERSION
-update_readme  $NEW_VERSION
+create_package "$NEW_VERSION"
+upload_zipfile "$NEW_VERSION"
+update_readme  "$NEW_VERSION"
 if [[ $DO_COMMIT == yes ]]; then
-  commit_release $NEW_VERSION
-  printf "Version $NEW_VERSION successfully created and pushed to Github!"
+  commit_release "$NEW_VERSION"
+  printf "Version %s successfully created and pushed to Github!" "$NEW_VERSION"
 else
-  printf "Version $NEW_VERSION successfully created!"
+  printf "Version %s successfully created!" "$NEW_VERSION"
 fi
 
 trap - DEBUG EXIT
