@@ -9,7 +9,7 @@ You must have a copy of the board game in order to use this program.
 
 ## Downloading the package
 
-You can use this link to download the latest release: [Version 2.8][1]
+You can use this link to download the latest release: [Version 2.9][1]
 
 If you are upgrading to a newer version and the **major** version numbers of the two versions
 are the same, then any saved games in progress will be compatible.
@@ -18,7 +18,7 @@ Simply copy the *games* folder from the older *coltwi-x.x* directory to the
 new *coltwi-x.x* directory.
 
 
-[1]: https://www.dropbox.com/s/br7vmbbke42adnc/coltwi-2.8.zip?dl=0
+[1]: https://www.dropbox.com/scl/fi/pzxnkkrkc5p57jnsthv81/coltwi-2.9.zip?rlkey=8o9ryf2mb15hbrzmovpwon7ys&dl=0
 
 
 ## Running the program
