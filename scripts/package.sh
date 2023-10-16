@@ -97,7 +97,7 @@ get_access_token() {
       -d refresh_token="$refresh_token" \
       -d client_id="$client_id" > $response
 
-  if fgrep --quiet '"error":' $response; then
+  if grep -F --quiet '"error":' $response; then
     printf "Error getting access token\n" >&2
     jq . $response >&2
   else
