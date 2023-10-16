@@ -101,7 +101,7 @@ get_access_token() {
     printf "Error getting access token\n" >&2
     jq . $response >&2
   else
-    jq .access_token $response | sd '^"|"$' ''
+    jq --raw-output .access_token $response
     result=0
   fi
 
@@ -137,7 +137,7 @@ get_zipfile_url() {
     printf "Error getting zipfile url\n" >&2
     jq . $response >&2
   else
-    jq '.url' $response | sd '^"|"$' ''
+    jq --raw-output '.url' $response
     result=0
   fi
 
