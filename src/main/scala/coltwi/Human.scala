@@ -409,16 +409,16 @@ object Human {
         val activateSpaces = sweepSpaces.toList.sorted filter { name =>
           !(activatedSpaces contains name) && guerrillasActivated(game.getSpace(name)) > 0
         }
-        val canSweep    = !finishedSelectingSweeps && sweepCandidates.nonEmpty
+        val canSelect    = !finishedSelectingSweeps && sweepCandidates.nonEmpty
         val canActivate = finishedSelectingSweeps && activateSpaces.nonEmpty
         val canFinishSelecting = sweepSpaces.nonEmpty && !finishedSelectingSweeps
 
         val choices = List(
-          choice(canSweep,                 "sweep",      s"Select a sweep space"),
+          choice(canSelect,                "select",      s"Select a sweep space"),
           choice(canActivate,              "activate",   s"Activate guerrillas in a sweep space"),
           choice(canFinishSelecting,       "stopSelect", s"Finished selecting sweep spaces"),
           choice(specialActivity.allowed,  "special",    s"Perform a special activity"),
-          choice(!canSweep && !canActivate,"done",       s"Complete the $Gov turn"),
+          choice(!canSelect && !canActivate,"done",       s"Complete the $Gov turn"),
           choice(true,                     "abort",      s"Abort the entire $Gov turn")
         ).flatten
 
@@ -431,11 +431,13 @@ object Human {
 
         println(s"\nChoose one:")
         askMenu(choices, allowAbort = false).head match {
-          case "sweep" =>
+          case "select" =>
             askCandidateAllowNone(s"\nChoose space to Sweep: ", sweepCandidates.toList.sorted) foreach { spaceName =>
               if (sweepInSpace(spaceName, params))
                 sweepSpaces += spaceName
             }
+            if (sweepSpaces.size == params.maxSpaces.getOrElse(1000))
+              finishedSelectingSweeps = true
             nextChoice()
 
           case "activate" =>
