@@ -2,6 +2,7 @@ target/
 games/
 test_config
 NOTES.txt
+project/project/
 .metals/
 .bsp
 .bloop
