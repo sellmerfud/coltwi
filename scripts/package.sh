@@ -11,7 +11,7 @@ shopt -s extglob
 
 usage() {
   {
-    printf "usage: package.sh [--commit|--no_commit] [version]\n"
+    printf "usage: release.sh [--commit|--no_commit] [version]\n"
     printf "  --commit    - Commit changes and push them to Github (Default)\n"
     printf "  --no-commit - Do not commit changes\n"
     printf "\n"
@@ -79,6 +79,7 @@ commit_release() {
   git ci   -m"Update version number to $version"
   git tag  -m"Release v$version" "v$version"
   git push --tags origin master
+  gh release create --generate-notes --title "Version $version" "v$version"
 }
 
 
