@@ -294,12 +294,6 @@ object Human {
         ).flatten
 
 
-        val avail = sourceCandidates.toList.sorted map { name =>
-          val movers = game.getSpace(name).pieces.only(POLICE) - movingGroups(name)
-          s"${name} ($movers)"
-        }
-        val moved = movingGroups.toList.sortBy(_._1) map { case (n, p) => s"$n ($p)"}
-
         println()
         wrap("Garrison spaces: ", garrisoned.toList.sorted) foreach println
         println(s"\nChoose one:  (${amountOf(totalMoved, "Police cube")} moved so far)")
@@ -316,12 +310,16 @@ object Human {
                 garrisoned.toList.head
               else
                 askCandidate(s"Select destination for cubes: ", garrisoned.toList.sorted)
-              val sp   = game.getSpace(source)
-              val most = (6 - totalMoved) min movablePolice(sp).total
-              val num  = askInt(s"Move how many police from $source to $dest", 0, most)
-              val p    = askPieces(movablePolice(sp), num, POLICE)
-              movePieces(p, source, dest)
-              movingGroups.add(dest, p)
+              if (source == dest)
+                println("Nothing to move, since the source and destination are the same.")
+              else {
+                val sp   = game.getSpace(source)
+                val most = (6 - totalMoved) min movablePolice(sp).total
+                val num  = askInt(s"Move how many police from $source to $dest", 0, most)
+                val p    = askPieces(movablePolice(sp), num, POLICE)
+                movePieces(p, source, dest)
+                movingGroups.add(dest, p)
+              }
             }
             catch {
               case AbortAction =>
