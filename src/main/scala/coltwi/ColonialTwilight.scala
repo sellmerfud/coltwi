@@ -2101,17 +2101,18 @@ object ColonialTwilight {
       readLine(prompt) match {
         case null => getName
         case VALID_NAME(name) =>
-          if ((gamesDir/name).exists) {
-            println(s"A game called '$name' already exists.")
+          val trimmed = name.trim()
+          if ((gamesDir/trimmed).exists) {
+            println(s"A game called '$trimmed' already exists.")
             if (askYorN(s"Do you want to overwrite the existing game (y/n)? ")) {
-              (gamesDir/name).rmtree()
-              name
+              (gamesDir/trimmed).rmtree()
+              trimmed
             }
             else
               getName
           }
           else
-            name
+            trimmed
         case name => 
           println("The name must consist of one or more letters, numbers, spaces, dashes or undercores")
           getName
