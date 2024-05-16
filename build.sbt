@@ -25,12 +25,12 @@ lazy val coltwi = (project in file("."))
     // To create a zip file that is readable on windoze
     //  1. Remove target/coltwi-x.x/.DS_Store, target/coltwi-x.x/lib/.DS_Store
     //  2. In the Mac Finder, right click target/coltwi-x.x and compress
-    stage in Compile := {
+    Compile / stage  := {
       val log = streams.value.log
-      (packageBin in Compile).value  // Depends on the package being built
-      val jar    = (artifactPath in packageBin in Compile).value
+      (Compile / packageBin).value  // Depends on the package being built
+      val jar    = (Compile / packageBin / artifactPath).value
       // Filter out the scala-compiler jar file.
-      val cp     = (managedClasspath in Compile).value.files filterNot (_.getName contains "compiler")
+      val cp     = (Compile / managedClasspath).value.files filterNot (_.getName contains "compiler")
       val base   = s"./target/coltwi-${version.value}"
       val lib    = s"./target/coltwi-${version.value}/lib"
       val others = Seq("src/other/README.txt",
