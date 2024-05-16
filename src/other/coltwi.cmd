@@ -17,7 +17,7 @@ rem Set the current working directory to the directory where this script is runn
 rem This is important so that all of our relative path references work correctly.
 pushd %~dp0
 
-set CLASSPATH=lib\coltwi_2.13-2.11.jar;^
+set CLASSPATH=lib\coltwi_2.13-2.12.jar;^
 lib\scala-library-2.13.10.jar;^
 lib\scala-parser-combinators_2.13-2.1.1.jar
 
