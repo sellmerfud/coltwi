@@ -97,7 +97,7 @@ object Human {
   // the space.
   def checkPeaceOfTheBrave(spaceName: String): Unit = {
     val sp = game.getSpace(spaceName)
-    val prompt = s"\nDo you wish pay 1 resource to remove 1 guerrilla from $spaceName (y/n) "
+    val prompt = s"\nDo you wish pay 1 resource to remove 1 guerrilla from ${displaySpace(spaceName)} (y/n) "
     if (momentumInPlay(MoPeaceOfTheBrave) && game.resources(Gov) > 0 && sp.totalGuerrillas > 0 && askYorN(prompt)) {
       decreaseResources(Gov, 1)
       removeToAvailable(spaceName, askPieces(sp.pieces, 1, GUERRILLAS))
@@ -164,7 +164,7 @@ object Human {
           println(s"\nChoose one (${amtRes(Gov)} remaining):")
         askMenu(choices, allowAbort = false).head match {
           case "space" =>
-            askCandidateAllowNone(s"\nChoose space to Train: ", candidateSpaces.toList.sorted(TrainingSpaceOrdering)) foreach { spaceName =>
+            askSpaceAllowNone(s"\nChoose space to Train: ", candidateSpaces.toList.sorted(TrainingSpaceOrdering)) foreach { spaceName =>
               if (trainInSpace(spaceName, params))
                 trainSpaces += spaceName
             }
@@ -194,7 +194,7 @@ object Human {
       val savedState = game
       try {
         log()
-        log(s"$Gov executes Train operation: $spaceName")
+        log(s"$Gov executes Train operation: ${displaySpace(spaceName)}")
         if (!params.free) {
           log()
           decreaseResources(Gov, 2)
@@ -214,7 +214,7 @@ object Human {
       }
       catch {
         case AbortAction =>
-          println(s"\n>>>> Aborting Train operation in $spaceName <<<<")
+          println(s"\n>>>> Aborting Train operation in ${displaySpace(spaceName)} <<<<")
           println(separator())
           displayGameStateDifferences(game, savedState)
           game = savedState
@@ -232,7 +232,7 @@ object Human {
         val prompt = if (completed == 0) "\nDo you wish to pacify in one of the training spaces? (y/n) "
                      else "\nDo you wish to pacify in a second training space? (y/n) "
         if (completed < maxSpaces && candidates.nonEmpty && game.resources(Gov) > 1 && askYorN(prompt)) {
-          val name = askCandidate("Choose space to pacify: ", candidates.toList.sorted, allowAbort = false)
+          val name = askSpace("Choose space to pacify: ", candidates.toList.sorted, allowAbort = false)
           val sp = game.getSpace(name)
           val maxInSpace = sp.terror + 1
           val maxPossible = maxInSpace min (game.resources(Gov) / 2)
@@ -255,7 +255,7 @@ object Human {
         }
       }
 
-      if (candidateSpaces.nonEmpty) {
+      if (candidateSpaces.nonEmpty && game.resources(Gov) > 1) {
         println(s"\nYou may pacify in up to ${maxSpaces} of the training spaces")
         nextPacify(0, candidateSpaces)
       }
@@ -299,23 +299,23 @@ object Human {
         println(s"\nChoose one:  (${amountOf(totalMoved, "Police cube")} moved so far)")
         askMenu(choices, allowAbort = false).head match {
           case "space"  =>
-            garrisoned += askCandidate(s"Select destination space: ", destCandidates)
+            garrisoned += askSpace(s"Select destination space: ", destCandidates)
             nextChoice()
 
           case "police" =>
             val savedState = game
             try {
-              val source = askCandidate(s"\nSelect space with police cubes: ", sourceCandidates)
+              val source = askSpace(s"\nSelect space with police cubes: ", sourceCandidates)
               val dest = if (garrisoned.size == 1)
                 garrisoned.toList.head
               else
-                askCandidate(s"Select destination for cubes: ", garrisoned.toList.sorted)
+                askSpace(s"Select destination for cubes: ", garrisoned.toList.sorted)
               if (source == dest)
                 println("Nothing to move, since the source and destination are the same.")
               else {
                 val sp   = game.getSpace(source)
                 val most = (6 - totalMoved) min movablePolice(sp).total
-                val num  = askInt(s"Move how many police from $source to $dest", 0, most)
+                val num  = askInt(s"Move how many police from ${displaySpace(sp)} to ${displaySpace(dest)}", 0, most)
                 val p    = askPieces(movablePolice(sp), num, POLICE)
                 movePieces(p, source, dest)
                 movingGroups.add(dest, p)
@@ -365,7 +365,7 @@ object Human {
       val candidates = spaceNames(spaces(garrisoned.toList.sorted) filter (guerrillasActivated(_) > 0))
       if (candidates.nonEmpty) {
         val name = if (candidates.size == 1) candidates.head
-                   else askCandidate(s"Choose space to activate guerrillas: ", candidates, allowAbort = false)
+                   else askSpace(s"Choose space to activate guerrillas: ", candidates, allowAbort = false)
         val sp = game.getSpace(name)
         activateHiddenGuerrillas(name, guerrillasActivated(sp))
       }
@@ -430,7 +430,7 @@ object Human {
         println(s"\nChoose one:")
         askMenu(choices, allowAbort = false).head match {
           case "select" =>
-            askCandidateAllowNone(s"\nChoose space to Sweep: ", sweepCandidates.toList.sorted) foreach { spaceName =>
+            askSpaceAllowNone(s"\nChoose space to Sweep: ", sweepCandidates.toList.sorted) foreach { spaceName =>
               if (sweepInSpace(spaceName, params))
                 sweepSpaces += spaceName
             }
@@ -439,7 +439,7 @@ object Human {
             nextChoice()
 
           case "activate" =>
-            askCandidateAllowNone(s"\nChoose space to activate guerrillas: ", activateSpaces.sorted) foreach { spaceName =>
+            askSpaceAllowNone(s"\nChoose space to activate guerrillas: ", activateSpaces.sorted) foreach { spaceName =>
               activateHiddenGuerrillas(spaceName, guerrillasActivated(game.getSpace(spaceName)))
               activatedSpaces += spaceName
             }
@@ -478,7 +478,7 @@ object Human {
       val savedState = game
       try {
         log()
-        log(s"$Gov executes Sweep operation: $spaceName")
+        log(s"$Gov executes Sweep operation: ${displaySpace(spaceName)}")
         if (!params.free) {
           log()
           decreaseResources(Gov, 2)
@@ -488,9 +488,9 @@ object Human {
         def nextSource(): Unit = {
           val sources = sourceSpaces(game.getSpace(spaceName))
           if (sources.nonEmpty) {
-            val choices = (sources map (name => name -> s"Move troops from $name")) :+
-                          "done"  -> s"Finished moving troops to $spaceName from adjacent spaces"  :+
-                          "abort" -> s"Abort the sweep operation in $spaceName"
+            val choices = (sources map (name => name -> s"Move troops from ${displaySpace(name)}")) :+
+                          "done"  -> s"Finished moving troops to ${displaySpace(spaceName)} from adjacent spaces"  :+
+                          "abort" -> s"Abort the sweep operation in ${displaySpace(spaceName)}"
             println(s"\nChoose one:")
             askMenu(choices, allowAbort = false).head match {
               case "done" =>
@@ -518,7 +518,7 @@ object Human {
       }
       catch {
         case AbortAction =>
-          println(s"\n>>>> Aborting Sweep operation in $spaceName <<<<")
+          println(s"\n>>>> Aborting Sweep operation in ${displaySpace(spaceName)} <<<<")
           println(separator())
           displayGameStateDifferences(game, savedState)
           game = savedState
@@ -575,9 +575,9 @@ object Human {
         println(s"\nChoose one:")
         askMenu(choices, allowAbort = false).head match {
           case "assault" =>
-            askCandidateAllowNone(s"\nChoose space to Assault: ", assaultCandidates.toList.sorted) foreach { spaceName =>
+            askSpaceAllowNone(s"\nChoose space to Assault: ", assaultCandidates.toList.sorted) foreach { spaceName =>
               log()
-              log(s"$Gov executes Assault operation: $spaceName")
+              log(s"$Gov executes Assault operation: ${displaySpace(spaceName)}")
               if (!params.free)
                 decreaseResources(Gov, costPerSpace)
               checkPeaceOfTheBrave(spaceName)
@@ -701,7 +701,7 @@ object Human {
         val spaceChoice = if (deploySpaces.size < 4) List("space" -> "Select a map space for deployment") else Nil
         val deployChoices = if (deploySpaces.size > 1 && numMoved < 6)
           for (name <- deploySpaceNames; if movable(name).total > 0)
-            yield (name -> s"Deploy pieces out of $name  (${movable(name)})")
+            yield (name -> s"Deploy pieces out of ${displaySpace(name)}  (${movable(name)})")
         else
           Nil
 
@@ -713,7 +713,7 @@ object Human {
         println(s"${amountOf(numMoved, "piece")} moved so far")
         askMenu(choices).head match {
           case "space" =>
-            val name = askCandidate("Select deployment space: ", getMoveCandidates)
+            val name = askSpace("Select deployment space: ", getMoveCandidates)
             deploySpaces += name -> Pieces()
             nextAction()
           case "done" =>
@@ -724,9 +724,9 @@ object Human {
               nextAction()
           case src =>
             val candidates = deploySpaceNames filterNot (_ == src)
-            val dest = if (candidates.size == 1) candidates.head else askCandidate("Select destination: ", candidates)
+            val dest = if (candidates.size == 1) candidates.head else askSpace("Select destination: ", candidates)
             val srcPieces = movable(src)
-            val num  = askInt(s"Deploy how many pieces from $src to $dest", 0, srcPieces.total min (6 - numMoved))
+            val num  = askInt(s"Deploy how many pieces from ${displaySpace(src)} to ${displaySpace(dest)}", 0, srcPieces.total min (6 - numMoved))
             if (num > 0) {
               val pieces = askPieces(srcPieces, num)
               (src, dest) match {
@@ -745,7 +745,7 @@ object Human {
     // Resettle - Choose one space and place a resettled marker there
     //            Remove any support/opposition
     def resettleSpace(params: Params): Unit = {
-      addResettledMarker(askCandidate("Resettle which space? ", getResettleCandidates.toList.sorted))
+      addResettledMarker(askSpace("Resettle which space? ", getResettleCandidates.toList.sorted))
     }
   }
 
@@ -771,7 +771,7 @@ object Human {
           val spaceChoice = if (selectedSpaces.size < maxSpaces) List("space" -> "Select a Troop Lift space") else Nil
           val liftChoices = if (selectedSpaces.size > 1)
             (selectedSpaces.sorted filter (name => game.getSpace(name).frenchTroops > 0)
-                                   map    (name => name -> s"Lift French troops out of $name"))
+                                   map    (name => name -> s"Lift French troops out of ${displaySpace(name)}"))
           else
             Nil
           val choices = spaceChoice ::: liftChoices ::: List(
@@ -788,13 +788,13 @@ object Human {
               else liftTroops(selectedSpaces)
             case "space" =>
               val candidates = spaceNames(game.algerianSpaces) filterNot selectedSpaces.contains
-              val name = askCandidate("Select Troop Lift space: ", candidates.sorted)
+              val name = askSpace("Select Troop Lift space: ", candidates.sorted)
               liftTroops(name :: selectedSpaces)
 
             case src =>
-              val dest = askCandidate("\nSelect destination for French troops: ", selectedSpaces.sorted filterNot (_ == src))
+              val dest = askSpace("\nSelect destination for French troops: ", selectedSpaces.sorted filterNot (_ == src))
               val srcSpace = game.getSpace(src)
-              askInt(s"Lift how many French troops from $src to $dest", 0, srcSpace.frenchTroops) match {
+              askInt(s"Lift how many French troops from ${srcSpace.nameAndZone} to ${displaySpace(dest)}", 0, srcSpace.frenchTroops) match {
                 case 0   =>
                 case num =>
                   val (pieces, swept) = askFrenchTroops(srcSpace, movingGroups(src), num)
@@ -868,7 +868,7 @@ object Human {
             println("Choose one:")
             askMenu(choices).head match {
               case "select" =>
-                val name = askCandidate("Select space: ", candidates.toList.sorted)
+                val name = askSpace("Select space: ", candidates.toList.sorted)
                 selectSpaces(name :: selected)
               case "done"   => selected
               case "abort"  => if (askYorN("Really abort? (y/n) ")) throw AbortAction else selectSpaces(selected)
@@ -942,8 +942,8 @@ object Human {
 
             println()
             if (torture.total > 0)
-              println(s"$torture will be removed from $name due to the Torture capability")
-            println(s"Choose pieces to remove from $name:")
+              println(s"$torture will be removed from ${displaySpace(name)} due to the Torture capability")
+            println(s"Choose pieces to remove from ${displaySpace(name)}:")
             askMenu(choices).head
           }
           (name -> (removed + torture)) :: nextSpace(remainingSpaces.tail, numRemoved + removed.total)
@@ -951,7 +951,8 @@ object Human {
 
         val losses = nextSpace(selectSpaces(Nil).reverse, 0)
         val spaceNames = losses map (_._1)
-        log(s"\nGovernment neutralizes in ${andList(spaceNames)}")
+        val displayNames = spaceNames map displaySpace
+        log(s"\nGovernment neutralizes in ${andList(displayNames)}")
         removeLosses(losses)
         log()
         for (name <- spaceNames; sp = game.getSpace(name)) {
@@ -1066,7 +1067,7 @@ object Human {
       val candidates = spaceNames(game.algerianSpaces filter (sp => !pacified(sp.name) && canPacify(sp))).sorted
       val maxResources = game.resources(Gov) min (game.commitment - totalSpent)
       if (candidates.nonEmpty && maxResources > 1) {
-        val choices = (candidates map (name => name -> s"Pacify in $name")) :+ ("done" -> "Finished pacifying")
+        val choices = (candidates map (name => name -> s"Pacify in ${displaySpace(name)}")) :+ ("done" -> "Finished pacifying")
         println()
         println(s"\nResources available: ${game.resources(Gov)}, Resources spent: $totalSpent, Gov commitment: ${game.commitment}")
         println("Choose one:")
@@ -1092,7 +1093,7 @@ object Human {
               nextPacify(pacified, totalSpent)
             else {
               val spentThisSpace = num * 2;
-              log(s"\nGovernment pacifies: $name")
+              log(s"\nGovernment pacifies: ${sp.nameAndZone}")
               log(separator())
               decreaseResources(Gov, spentThisSpace)
               removeTerror(name, num min sp.terror)
@@ -1120,10 +1121,10 @@ object Human {
           case "done" =>
           case "redeploy" =>
             try {
-              val srcName  = askCandidate("\nSelect space with troops: ", sources, allowAbort = false)
-              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName), allowAbort = false)
+              val srcName  = askSpace("\nSelect space with troops: ", sources, allowAbort = false)
+              val destName = askSpace("Select destination space: ", dests filterNot (_ == srcName), allowAbort = false)
               val src      = game.getSpace(srcName)
-              val num      = askInt(s"Deploy how many troops out of $srcName", 0, src.totalTroops, allowAbort = false)
+              val num      = askInt(s"Deploy how many troops out of ${src.nameAndZone}", 0, src.totalTroops, allowAbort = false)
               val troops   = askPieces(src.pieces, num, TROOPS, allowAbort = false)
               redeployed = true
               redeployPieces(troops, srcName, destName)
@@ -1150,10 +1151,10 @@ object Human {
           case "done" =>
           case "redeploy" =>
             try {
-              val srcName  = askCandidate("\nSelect space with police: ", sources, allowAbort = false)
-              val destName = askCandidate("Select destination space: ", dests filterNot (_ == srcName), allowAbort = false)
+              val srcName  = askSpace("\nSelect space with police: ", sources, allowAbort = false)
+              val destName = askSpace("Select destination space: ", dests filterNot (_ == srcName), allowAbort = false)
               val src      = game.getSpace(srcName)
-              val num      = askInt(s"Deploy how many police out of $srcName", 0, src.totalPolice, allowAbort = false)
+              val num      = askInt(s"Deploy how many police out of ${src.nameAndZone}", 0, src.totalPolice, allowAbort = false)
               val police   = askPieces(src.pieces, num, POLICE, allowAbort = false)
               redeployed = true
               redeployPieces(police, srcName, destName)

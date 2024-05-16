@@ -509,7 +509,7 @@ object ColonialTwilight {
     markers:        List[String] = Nil) {
     
     val nameAndZone = {
-      val z = if (spaceType == Sector) s" $zone" else ""
+      val z = if (spaceType == Sector) s" [$zone]" else ""
       s"$name$z"
     }
     
@@ -587,6 +587,16 @@ object ColonialTwilight {
     def moghazniTrainOnly = moghazniTrain && !(normalTrain || recallDeGaulleTrain)
   }
   
+  def displaySpace(spaceName: String): String = {
+    //  Filter out "France Track", etc.
+    if (game.hasSpace(_.name == spaceName))
+      game.getSpace(spaceName).nameAndZone
+    else
+      spaceName
+  }
+
+  def displaySpace(space: Space): String = space.nameAndZone
+    
   // Default empty spaces
   val DefaultBarika           = Space(Barika, Sector, "I-1", Mountains, 1)
   val DefaultBatna            = Space(Batna, Sector, "I-2", Mountains, 0)
@@ -1102,13 +1112,13 @@ object ColonialTwilight {
   def activateHiddenGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.activateGuerrillas(num))
-    log(s"Flip ${hiddenG(num)} to active in $spaceName")
+    log(s"Flip ${hiddenG(num)} to active in ${sp.nameAndZone}")
   }
   
   def hideActiveGuerrillas(spaceName: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(spaceName)
     game = game.updatePieces(sp, sp.hideGuerrillas(num))
-    log(s"Flip ${activeG(num)} to underground in $spaceName")
+    log(s"Flip ${activeG(num)} to underground in ${sp.nameAndZone}")
   }
 
   def increaseResources(role: Role, amount: Int): Unit = if (amount > 0) {
@@ -1159,14 +1169,14 @@ object ColonialTwilight {
     val sp = game.getSpace(name)
     assert(game.terrorMarkersAvailable >= num, "addTerror: not enough available markers")
     game = game.updateSpace(sp.addMarker(TerrorMarker, num))
-    log(s"Add ${amountOf(num, "terror marker")} to $name")
+    log(s"Add ${amountOf(num, "terror marker")} to ${sp.nameAndZone}")
   }
   
   def removeTerror(name: String, num: Int): Unit = if (num > 0) {
     val sp = game.getSpace(name)
     assert(sp.terror >= num, "removeTerror: not enought markers in space")
     game = game.updateSpace(sp.removeMarker(TerrorMarker, num))
-    log(s"Remove ${amountOf(num, "terror marker")} from $name")
+    log(s"Remove ${amountOf(num, "terror marker")} from ${sp.nameAndZone}")
   }
   
   def addResettledMarker(name: String): Unit = {
@@ -1240,11 +1250,11 @@ object ColonialTwilight {
     assert(orig.name == updated.name, "logControlChange: not the same space!")
     if (orig.control != updated.control) {
       if (updated.control == Uncontrolled)
-        log(s"Remove ${orig.control} marker from ${orig.name}")
+        log(s"Remove ${orig.control} marker from ${orig.nameAndZone}")
       else if (orig.control == Uncontrolled)
-        log(s"Place ${updated.control} marker in ${orig.name}")
+        log(s"Place ${updated.control} marker in ${orig.nameAndZone}")
       else
-        log(s"Flip control marker to ${updated.control} in ${orig.name}")
+        log(s"Flip control marker to ${updated.control} in ${orig.nameAndZone}")
     }
   }
   
@@ -1252,11 +1262,11 @@ object ColonialTwilight {
     assert(orig.name == updated.name, "logSupportChange: not the same space!")
     if (orig.support != updated.support) {
       if (updated.support == Neutral)
-        log(s"Remove ${orig.support} marker from ${orig.name}")
+        log(s"Remove ${orig.support} marker from ${orig.nameAndZone}")
       else if (orig.support == Neutral)
-        log(s"Place ${updated.support} marker in ${orig.name}")
+        log(s"Place ${updated.support} marker in ${orig.nameAndZone}")
       else
-        log(s"Flip support marker to ${updated.support} in ${orig.name}")
+        log(s"Flip support marker to ${updated.support} in ${orig.nameAndZone}")
       // Log change in score
       if (orig.support != Neutral && updated.support != Neutral) {
         log(s"Move 'Support+Commit' marker to ${game.govScore}")
@@ -1471,6 +1481,36 @@ object ColonialTwilight {
       case xs       => askOneOf(prompt, xs, allowNone = true, allowAbort = false)
     }
   }
+
+  def askSpace(prompt: String, candidates: List[String], allowAbort: Boolean = true): String = {
+    val displays = candidates map displaySpace
+    if (candidates.length > 10)  {
+      val candidateMap = displays.zip(candidates).toMap
+      val selected = askCandidate(prompt, displays, allowAbort)
+      candidateMap(selected)
+    } else {
+      val choices = candidates.zip(displays)
+      println()
+      println(prompt)
+      askMenu(choices, allowAbort = allowAbort).head
+    }
+  }
+
+  def askSpaceAllowNone(prompt: String, candidates: List[String], allowAbort: Boolean = true): Option[String] = {
+    val displays = candidates map displaySpace
+    if (candidates.length > 10) {
+      val candidateMap = displays.zip(candidates).toMap
+      val selected = askCandidateAllowNone(prompt, displays)
+      selected map candidateMap.apply
+    } else {
+      var choices = candidates.zip(displays).map {
+        case (candidate, display) => (Some(candidate), display)
+      } :+ (None, "Cancel space selection")
+      println()
+      println(prompt)
+      askMenu(choices, allowAbort = allowAbort).head
+    }
+  }
   
   val ALL_WILAYAS = Set("I", "II", "III", "IV", "V", "VI")
 
@@ -1554,7 +1594,7 @@ object ColonialTwilight {
       Pieces()
     }
     else {
-      println(s"\nPlace up to ${amountOf(maxPieces, "piece")} in $spaceName (${andList(availTypes)})")
+      println(s"\nPlace up to ${amountOf(maxPieces, "piece")} in ${displaySpace(spaceName)} (${andList(availTypes)})")
       
       def nextType(placed: Pieces, remainingTypes: List[PieceType]): Pieces = {
         val maxRemaining = maxPieces - placed.total
@@ -1614,7 +1654,7 @@ object ColonialTwilight {
         removed ++ (candidates map (n => (n -> game.getSpace(n).numOf(pieceType))))
       }
       else {
-        val name = askCandidate(s"\nSelect space to remove $pieceType: ", candidates)
+        val name = askSpace(s"\nSelect space to remove $pieceType: ", candidates)
         val numInSpace = game.getSpace(name).numOf(pieceType) min numLeft
         val minFromSpace = 1 max (numLeft - (avail - numInSpace))
         val x = if (minFromSpace == numInSpace) numInSpace
@@ -1629,7 +1669,7 @@ object ColonialTwilight {
     for ((name, number) <- removed; sp = game.getSpace(name)) {
       val updated = sp.copy(pieces = sp.remove(number, pieceType))
       game = game.updateSpace(updated)
-      log(s"Remove ${amtPiece(number, pieceType)} from $name to AVAILABLE")
+      log(s"Remove ${amtPiece(number, pieceType)} from ${sp.nameAndZone} to AVAILABLE")
       logControlChange(sp, updated)
     }
   }
@@ -1642,7 +1682,7 @@ object ColonialTwilight {
     val sp = game.getSpace(spaceName)
     val updated = sp.copy(pieces = sp.pieces + pieces)
     game = game.updateSpace(updated)
-    log(s"\nPlace the following pieces from AVAILABLE into $spaceName:")
+    log(s"\nPlace the following pieces from AVAILABLE into ${sp.nameAndZone}:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     if (logControl)
       logControlChange(sp, updated)
@@ -1695,7 +1735,7 @@ object ColonialTwilight {
     val sp = game.getSpace(spaceName)
     val updated = sp.copy(pieces = sp.pieces + pieces)
     game = game.updateSpace(updated).copy(outOfPlay = game.outOfPlay - pieces)
-    log(s"\nPlace the following pieces from OUT-OF-PLAY into $spaceName:")
+    log(s"\nPlace the following pieces from OUT-OF-PLAY into ${displaySpace(spaceName)}:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     logControlChange(sp, updated)
     if (pieces.flnBases > 0)
@@ -1704,10 +1744,10 @@ object ColonialTwilight {
   
   def removeToAvailable(spaceName: String, pieces: Pieces, logControl: Boolean = true): Unit = if (pieces.total > 0) {
     val sp = game.getSpace(spaceName)
-    assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
+    assert(sp.pieces contains pieces, s"${sp.nameAndZone} does not contain all requested pieces: $pieces")
     val updated = sp.copy(pieces = sp.pieces - pieces)
     game = game.updateSpace(updated)
-    log(s"\nMove the following pieces from $spaceName to AVAILABLE:")
+    log(s"\nMove the following pieces from ${sp.nameAndZone} to AVAILABLE:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     if (logControl)
       logControlChange(sp, updated)
@@ -1717,7 +1757,7 @@ object ColonialTwilight {
 
   def removeToCasualties(spaceName: String, pieces: Pieces, logControl: Boolean = true): Unit = if (pieces.total > 0) {
     val sp = game.getSpace(spaceName)
-    assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
+    assert(sp.pieces contains pieces, s"${sp.nameAndZone} does not contain all requested pieces: $pieces")
     val updated = sp.copy(pieces = sp.pieces - pieces)
     // Guerrillas in casualties are always hidden.
     val toCasualties = if (pieces.activeGuerrillas == 0)
@@ -1725,7 +1765,7 @@ object ColonialTwilight {
     else
       pieces.remove(pieces.activeGuerrillas, ActiveGuerrillas).add(pieces.activeGuerrillas, HiddenGuerrillas)
     game = game.updateSpace(updated).copy(casualties = game.casualties + toCasualties)
-    log(s"\nMove the following pieces from $spaceName to CASUALTIES:")
+    log(s"\nMove the following pieces from ${sp.nameAndZone} to CASUALTIES:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     if (logControl)
       logControlChange(sp, updated)
@@ -1735,7 +1775,7 @@ object ColonialTwilight {
 
   def removeToOutOfPlay(spaceName: String, pieces: Pieces): Unit = if (pieces.total > 0) {
     val sp = game.getSpace(spaceName)
-    assert(sp.pieces contains pieces, s"$spaceName does not contain all requested pieces: $pieces")
+    assert(sp.pieces contains pieces, s"${sp.nameAndZone} does not contain all requested pieces: $pieces")
     val updated = sp.copy(pieces = sp.pieces - pieces)
     // Guerrillas in casualties are always hidden.
     val toOop = if (pieces.activeGuerrillas == 0)
@@ -1744,7 +1784,7 @@ object ColonialTwilight {
       pieces.remove(pieces.activeGuerrillas, ActiveGuerrillas).add(pieces.activeGuerrillas, HiddenGuerrillas)
     
     game = game.updateSpace(updated).copy(outOfPlay = game.outOfPlay + toOop)
-    log(s"\nMove the following pieces from $spaceName to OUT-OF-PLAY:")
+    log(s"\nMove the following pieces from ${sp.nameAndZone} to OUT-OF-PLAY:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     logControlChange(sp, updated)
     if (pieces.flnBases > 0)
@@ -1762,7 +1802,7 @@ object ColonialTwilight {
     val updatedSrc = srcSpace.copy(pieces = srcSpace.pieces - pieces)
     val updatedDst = dstSpace.copy(pieces = dstSpace.pieces + finalPieces)
     game = game.updateSpace(updatedSrc).updateSpace(updatedDst)
-    log(s"\nMove the following pieces from $source to $dest:")
+    log(s"\nMove the following pieces from ${srcSpace.nameAndZone} to ${dstSpace.nameAndZone}:")
     wrap("  ", pieces.stringItems) foreach (log(_))
     if (activateGuerrillas && pieces.hiddenGuerrillas > 0)
       log(s"Activate the ${hiddenG(pieces.hiddenGuerrillas)}")
@@ -1780,7 +1820,7 @@ object ColonialTwilight {
     val updatedSrc = srcSpace.copy(pieces = srcSpace.pieces - pieces)
     val updatedDst = dstSpace.copy(pieces = dstSpace.pieces + pieces)
     game = game.updateSpace(updatedSrc).updateSpace(updatedDst)
-    log(s"\nRedeploy the following pieces from $source to $dest:")
+    log(s"\nRedeploy the following pieces from ${srcSpace.nameAndZone} to ${dstSpace.nameAndZone}:")
     wrap("  ", pieces.stringItems) foreach (log(_))
   }
   
@@ -1801,7 +1841,7 @@ object ColonialTwilight {
     var gToCasualties = totalGuerrillasLost / 2
     
     for ((spaceName, lostPieces) <- losses) {
-      // log(s"\nLosses for $spaceName:")
+      // log(s"\nLosses for ${toNameAndZone(spaceName)}:")
       // wrap("  ", lostPieces.stringItems) foreach (log(_))
       val orig = game.getSpace(spaceName)
       removeToCasualties(spaceName, lostPieces.only(GOV_PIECES), logControl = false)
@@ -1859,15 +1899,7 @@ object ColonialTwilight {
     b += s.toString
     b.toList
   }
-  
-  def pause(): Unit = {
-    import scala.util.Properties.isWin
-    if (isWin)
-      readLine("Press Enter to continue... ")
-    else
-      readLine("Continue ↩︎ ")
-  }
-  
+    
   var echoLogging = true
   // Print the line to the console and save it in the game's history.
   def log(line: String = ""): Unit = {
@@ -1876,6 +1908,15 @@ object ColonialTwilight {
     game = game.copy(history = game.history :+ line)
   }
   
+  def pause(): Unit = {
+    // Do not pause if we are not printing to the terminal
+    if (echoLogging)
+      readLine("\n>>>>> [ Press Enter to continue... ] <<<<<")
+    else {
+      println("CWS - pause() called with echoLogging false")
+    }
+  }
+
   def separator(length: Int = 52, char: Char = '-'): String = char.toString * length
   
 
@@ -2772,7 +2813,7 @@ object ColonialTwilight {
   }
   
   def logAdjustment(spaceName: String, attributeName: String, oldValue: Any, newValue: Any): Unit =
-    logAdjustment(s"$spaceName: $attributeName", oldValue, newValue)
+    logAdjustment(s"${displaySpace(spaceName)}: $attributeName", oldValue, newValue)
   
   def adjustInt(name: String, current: Int, range: Range): Option[Int] = {
     val prompt = s"$name is $current.  Enter new value (${range.min} - ${range.max}) "
@@ -3079,7 +3120,7 @@ object ColonialTwilight {
       case _                => pickFrom.numOf(pieceType)
     }
     if (maxNum == 0) {
-      println(s"There are no ${pieceType} available to add to $name.")
+      println(s"There are no ${pieceType} available to add to ${sp.nameAndZone}.")
       pause()
     }
     else {

@@ -114,6 +114,7 @@ object Bot {
   // exist in the original gamestate.
   def showLogEntries(orig: GameState, updated: GameState): Unit = {
     updated.history.drop(orig.history.size) foreach println
+    pause()
   }
   
   // In order for the Bot to play an event that is not marked for FLN play,
@@ -420,6 +421,7 @@ object Bot {
           removeToAvailable(name, pieces)
           if (replace)
             placePieces(name, Pieces(hiddenGuerrillas = 1))
+          pause()
         }
     }
   }
@@ -455,11 +457,13 @@ object Bot {
       for (sp <- primary) {
         activateHiddenGuerrillas(sp.name, 1)
         increaseResources(Fln, 1)
+        pause()
       }
       if (game.resources(Fln) == 0)
         for (sp <- secondary) {
           activateHiddenGuerrillas(sp.name, 1)
           increaseResources(Fln, 1)
+          pause()
         }
     }
   }
@@ -480,6 +484,7 @@ object Bot {
       log(separator())
       log(s"FLN chooses: ${Pass}")
       performPass(Fln)
+      pause()
       Right(Pass)
     }
   }
@@ -604,7 +609,7 @@ object Bot {
         if (isFree || game.resources(Fln) > 0) {
           terrorized += target.name
           log()
-          log(s"$Fln executes Terror operation: ${target.name}")
+          log(s"$Fln executes Terror operation: ${target.nameAndZone}")
           if (isFree)
             log(s"Terror is free in city because '${CapEffectiveBomber}' is in play")
           else
@@ -614,7 +619,7 @@ object Bot {
             addTerror(target.name, 1)
           if (!momentumInPlay(MoIntimidation))
             setSupport(target.name, Neutral)
-        
+          pause()
           nextTerror()
         }
       }
@@ -669,16 +674,17 @@ object Bot {
       var sp = game.getSpace(name)
       if (ambush) {
         log()
-        log(s"$Fln executes Attack operation with ambush: $name")
+        log(s"$Fln executes Attack operation with ambush: ${sp.nameAndZone}")
         if (!turnState.freeOperation)
           decreaseResources(Fln, 1)
         if (!capabilityInPlay(CapFlnCommandos))
           activateHiddenGuerrillas(name, 1)
         removeLosses(name, attackLosses(sp.pieces, ambush))
+        pause()
       }
       else {
         log()
-        log(s"$Fln executes Attack operation: $name")
+        log(s"$Fln executes Attack operation: ${sp.nameAndZone}")
         decreaseResources(Fln, 1)
         activateHiddenGuerrillas(name, sp.hiddenGuerrillas)
         sp = game.getSpace(name)
@@ -696,6 +702,7 @@ object Bot {
               placePieces(name, Pieces(hiddenGuerrillas = 1))
           }
         }
+        pause()
       }
     }
     
@@ -928,16 +935,17 @@ object Bot {
                 if (force && haveAResource()) {
                   logRallyChoice()
                   log()
-                  log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
+                  log(s"$Fln executes Rally operation to allow agitation: ${sp.nameAndZone}")
                   if (!turnState.freeOperation)
                     decreaseResources(Fln, 1)
                   rallySpaces += sp.name
+                  pause()
                 }
               case PlaceBase =>
                 if (haveAResource()) {
                   logRallyChoice()
                   log()
-                  log(s"$Fln executes Rally operation: ${sp.name}")
+                  log(s"$Fln executes Rally operation: ${sp.nameAndZone}")
                   if (!turnState.freeOperation)
                     decreaseResources(Fln, 1)
                   val numActive = 2 min sp.activeGuerrillas
@@ -946,6 +954,7 @@ object Bot {
                   placePieces(sp.name, Pieces(flnBases = 1), logControl = false)
                   logControlChange(sp, game.getSpace(sp.name))
                   rallySpaces += sp.name
+                  pause()
                 }
 
               case PlaceGuerrillas =>
@@ -965,32 +974,35 @@ object Bot {
                     if (haveAResource()) {
                       logRallyChoice()
                       log()
-                      log(s"$Fln executes Rally operation to allow agitation: ${sp.name}")
+                      log(s"$Fln executes Rally operation to allow agitation: ${sp.nameAndZone}")
                       if (!turnState.freeOperation)
                         decreaseResources(Fln, 1)
                       rallySpaces += sp.name
+                      pause()
                     }
                     
                   case GuerrillasToPlace(0, Nil) =>  // Flip any active
                     if (numToPlace == 0 && sp.activeGuerrillas > 0 && haveAResource()) {
                       logRallyChoice()
                       log()
-                      log(s"$Fln executes Rally operation: ${sp.name}")
+                      log(s"$Fln executes Rally operation: ${sp.nameAndZone}")
                       if (!turnState.freeOperation)
                         decreaseResources(Fln, 1)
                       hideActiveGuerrillas(sp.name, sp.activeGuerrillas)
                       rallySpaces += sp.name
+                      pause()
                     }
                                     
                   case guerrillas =>  // Place guerrillas from sources
                     if (haveAResource()) {
                       logRallyChoice()
                       log()
-                      log(s"$Fln executes Rally operation: ${sp.name}")
+                      log(s"$Fln executes Rally operation: ${sp.nameAndZone}")
                       if (!turnState.freeOperation)
                         decreaseResources(Fln, 1)
                       placeGuerrillas(sp.name, guerrillas)
                       rallySpaces += sp.name
+                      pause()
                     }
                 }
               case _ => 
@@ -1013,6 +1025,7 @@ object Bot {
             decreaseResources(Fln, 1)
           increaseFranceTrack(1)
           shiftedFranceTrack = true
+          pause()
         }
         val supportSectorCandidates = spaceNames(game.spaces filter onlyIn filter (sp => (!hasRallied(sp.name) && sectorsAtSupport(sp))))
         doRallies(supportSectorCandidates, PlaceGuerrillas, SupportSectorPriorities)
@@ -1063,10 +1076,11 @@ object Bot {
         agitateSpace foreach { name =>
           val sp = game.getSpace(name)
           log()
-          log(s"$Fln agitates in $name")
+          log(s"$Fln agitates in ${sp.nameAndZone}")
           decreaseResources(Fln, costToAgitate(sp))
           removeTerror(name, sp.terror)
           decreaseSupport(name, 1)
+          pause()
         }
       }
       
@@ -1404,9 +1418,9 @@ object Bot {
                   val guerrillas = path.marchers(num, marchType.hiddenOnly, !(path.sourceHasBase || activates))
                   log()
                   if (path.isAdjacent)
-                    log(s"$Fln marches adjacent from ${path.source} to ${path.dest}")
+                    log(s"$Fln marches adjacent from ${displaySpace(path.source)} to ${displaySpace(path.dest)}")
                   else {
-                    log(s"$Fln marches from ${path.source} to ${path.dest} via: ${andList(path.spaces.tail.init)}")
+                    log(s"$Fln marches from ${displaySpace(path.source)} to ${displaySpace(path.dest)} via: ${andList(path.spaces.tail.init)}")
                     if (guerrillas.hiddenGuerrillas > 0 && activates) {
                       val activateSpace = path.activatedBySpace(num).get
                       log(s"Entering $activateSpace activates the hidden guerrillas")
@@ -1710,19 +1724,22 @@ object Bot {
       if (candidates.nonEmpty) {
         agitatedOnce = true
         val sp = topPriority(candidates, priorities)
-        log(s"\nFLN agitates: ${sp.name}")
+        log(s"\nFLN agitates: ${sp.nameAndZone}")
         log(separator())
         val cost = sp.terror + maxShift(sp)
         decreaseResources(Fln, cost)
         removeTerror(sp.name, sp.terror)
         decreaseSupport(sp.name, maxShift(sp))
+        pause()
         nextAgitate(resRemaining - cost, agitated + sp.name)
       }
     }
     log("\nFLN agitation")
     nextAgitate(game.resources(Fln) * 2 / 3, Set.empty)
-    if (!agitatedOnce)
+    if (!agitatedOnce) {
       log("FLN does not agitate any spaces")
+      pause()
+    }
   }
   
   // The FLN player may now move any Guerrillas from any space or spaces within a given Wilaya,
@@ -1782,6 +1799,7 @@ object Bot {
           val a = num min sp.activeGuerrillas
           val h = (num - a) min sp.hiddenGuerrillas
           redeployPieces(Pieces(hiddenGuerrillas = h, activeGuerrillas = a), srcName, destName)
+          pause()
           redeployed = true
         }
       }
@@ -1798,6 +1816,7 @@ object Bot {
         val newDestMap       = destMap + (srcName -> (destMap(srcName) + 1))
         val newRedeployments = redeployments + (destName -> newDestMap)
         redeployGuerrillas(newSrcs, newDests, newRedeployments)
+        pause()
       }
     }
     
@@ -1811,8 +1830,10 @@ object Bot {
     else
       for (wilaya <- ALL_WILAYAS)
         redeployGuerrillas(getSources(game.wilayaSpaces(wilaya)), getDests(game.wilayaSpaces(wilaya)))
-    if (!redeployed)
+    if (!redeployed) {
       log("FLN does not redeploy any guerrillas")
+      pause()
+    }
   }
 }
   
