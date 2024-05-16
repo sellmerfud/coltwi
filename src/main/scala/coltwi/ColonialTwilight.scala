@@ -2744,8 +2744,10 @@ object ColonialTwilight {
   }
   
   def showCommand(param: Option[String]): Unit = {
+    val spaceDisplay = SpaceNames map displaySpace
+    val spaceMap = spaceDisplay.zip(SpaceNames).toMap
     val options =  "scenario" :: "status" :: "available" :: "casualties" :: "out of play" ::
-                   "events" :: "sequence" :: "all" :: SpaceNames
+                   "events" :: "sequence" :: "all" :: spaceDisplay
                   
     askOneOf("Show (? for options): ", options, param, allowNone = true, allowAbort = false) foreach {
       case "scenario"     => printSummary(game.scenarioSummary)
@@ -2756,7 +2758,7 @@ object ColonialTwilight {
       case "events"       => printSummary(game.eventSummary)
       case "sequence"     => printSummary(game.sequenceSummary)  // card, 1st eligible, etc.
       case "all"          => printGameState()
-      case name           => printSummary(game.spaceSummary(name))
+      case name           => printSummary(game.spaceSummary(spaceMap(name)))
     }
   }
   
@@ -2775,10 +2777,12 @@ object ColonialTwilight {
   
     
   def adjustSettings(param: Option[String]): Unit = {
+    val spaceDisplay = SpaceNames map displaySpace
+    val spaceMap = spaceDisplay.zip(SpaceNames).toMap
     val options = List("gov resources", "fln resources", "commitment", "france track", "border zone",
                        "casualties", "out of play", "pivotal", "capabilities", "momentum", "bot debug",
                        "final prop support"
-                       ).sorted ::: SpaceNames
+                       ).sorted ::: spaceDisplay
 
     val choice = askOneOf("[Adjust] (? for list): ", options, param, allowNone = true, allowAbort = false)
     choice foreach {
@@ -2794,7 +2798,7 @@ object ColonialTwilight {
       case "momentum"           => adjustMomentum()
       case "bot debug"          => adjustBotDebug()
       case "final prop support" => adjustFinalPropSupport()
-      case name                 => adjustSpace(name)
+      case name                 => adjustSpace(spaceMap(name))
     }
   }
   
