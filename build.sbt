@@ -7,7 +7,7 @@ import java.util.HashSet
 lazy val commonSettings = Seq(
   organization := "org.sellmerfud",
   version      := "2.12",
-  scalaVersion := "2.13.10"
+  scalaVersion := "2.13.14"
 )
 
 lazy val stage = taskKey[Unit]("Create distribution zip file")

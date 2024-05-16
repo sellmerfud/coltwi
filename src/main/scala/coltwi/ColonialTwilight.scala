@@ -74,7 +74,7 @@ object ColonialTwilight {
       case x if x == Fln.name.toLowerCase => Fln
       case _ => throw new IllegalArgumentException(s"Invalid role name: $name")
     }
-    implicit val RoleOrdering = Ordering.by { role: Role => role.sortOrder }
+    implicit val RoleOrdering: Ordering[Role] = Ordering.by { role: Role => role.sortOrder }
     lazy val all = List(Gov, Fln)
     lazy val names = all map (_.name)
     lazy val maxNameLen = (names map (_.length)).max
@@ -119,7 +119,7 @@ object ColonialTwilight {
   }
 
   // Sort by card number
-  implicit val CardOrdering = new Ordering[Card] {
+  implicit val CardOrdering: Ordering[Card] = new Ordering[Card] {
     def compare(x: Card, y: Card) = x.number compare y.number
   }
   
@@ -473,7 +473,7 @@ object ColonialTwilight {
   
   // In Wilaya order, Cities first within the Wilaya.
   // Morocco and Tunisia last
-  implicit val SpaceOrdering = new Ordering[Space] {
+  implicit val SpaceOrdering: Ordering[Space] = new Ordering[Space] {
     private val SECTOR = """([^-]+)-(\d+)""".r
     
     def roman(x: String) = x match {
