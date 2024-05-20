@@ -461,14 +461,6 @@ object Human {
         }
       }
 
-      if (getSweepCandidates().isEmpty) {
-        if (game.resources(Gov) < 2 && !params.free)
-          println("\nYou do not have enough resources to perform a Sweep operation!")
-        else
-          println("\nThere are no spaces that can be targeted by a Sweep operation!")
-        throw AbortAction
-      }
-
       nextChoice()
 
       sweepSpaces.size
@@ -599,14 +591,6 @@ object Human {
               executeSpecialActivity(TroopLift::Nil, params)
 
         }
-      }
-
-      if (getAssaultCandidates().isEmpty) {
-        if (game.resources(Gov) < costPerSpace && !params.free)
-          println("\nYou do not have enough resources to perform an Assault operation!")
-        else
-          println("\nThere are no spaces that can be targeted by an Assault operation!")
-        throw AbortAction
       }
 
       nextChoice()
