@@ -608,7 +608,7 @@ object Human {
           new Bot.HighestPriority[Space]("Highest population", _.population))
 
         val sp = Bot.topPriority(candidates, priorities)
-        log(s"Fln places a guerrilla in one assault spaces due to capability: $CapRevenge")
+        log(s"Fln places a guerrilla in one assault spaces due to capability: $CapRevenge", Color.Event)
         placePieces(sp.name, Pieces(hiddenGuerrillas = 1))
       }
 
@@ -863,14 +863,14 @@ object Human {
         log()
         log(s"$Gov executes a Neutralize special ability")
         if (capabilityInPlay(CapOverkill))
-          log("The Overkill capability is in play: Up to four total pieces may be removed")
+          log("The Overkill capability is in play: Up to four total pieces may be removed", Color.Event)
         else
           log("Up to two total pieces may be removed")
 
         if (capabilityInPlay(CapTorture)) {
-          log("The Torture capability is in play")
+          log("The Torture capability is in play", Color.Event)
           decreaseCommitment(1)
-          log("One extra piece will be removed from each space (may be underground)")
+          log("One extra piece will be removed from each space (may be underground)", Color.Event)
         }
 
         val totalRemoval = if (capabilityInPlay(CapOverkill)) 4 else 2 // Excluding overkill
@@ -1028,7 +1028,7 @@ object Human {
       val finalAction = if (game.sequence.numActed == 0) executedAction else action
 
       if (game.sequence.numActed == 0)
-        log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box")
+        log(s"\nPlace the ${Gov} eligibility cylinder in the ${finalAction} box", Color.GameMarker)
       game = game.copy(sequence = game.sequence.nextAction(finalAction))
     }
     catch {

@@ -113,7 +113,8 @@ object Bot {
   // Print the log entries in the updated game state that do not 
   // exist in the original gamestate.
   def showLogEntries(orig: GameState, updated: GameState): Unit = {
-    updated.history.drop(orig.history.size) foreach println
+    for (LogEntry(text, color) <- updated.history.drop(orig.history.size))
+      displayLine(text, color)
     pause()
   }
   
@@ -611,7 +612,7 @@ object Bot {
           log()
           log(s"$Fln executes Terror operation: ${target.nameAndZone}")
           if (isFree)
-            log(s"Terror is free in city because '${CapEffectiveBomber}' is in play")
+            log(s"Terror is free in city because '${CapEffectiveBomber}' is in play", Color.Event)
           else
             decreaseResources(Fln, 1)
           activateHiddenGuerrillas(target.name, hiddenNeeded(target))
@@ -695,7 +696,7 @@ object Bot {
         if (die <= sp.totalGuerrillas) {
           removeLosses(name, attackLosses(sp.pieces, ambush))
           if (die == 1) {
-            log("Capture goods (die roll == 1)")
+            log("Capture goods (die roll == 1)", Color.Event)
             if (game.guerrillasAvailable == 0)
               log("No guerrillas in the available box")
             else
@@ -1692,7 +1693,7 @@ object Bot {
     
     val action = evaluateNode(LimOpAndZeroResources)
     if (game.sequence.numActed == 0)
-      log(s"\nPlace the ${Fln} eligibility cylinder in the ${action} box")
+      log(s"\nPlace the ${Fln} eligibility cylinder in the ${action} box", Color.GameMarker)
     game = game.copy(sequence = game.sequence.nextAction(action))
   }
   

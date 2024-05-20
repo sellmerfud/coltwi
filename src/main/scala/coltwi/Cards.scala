@@ -1784,7 +1784,7 @@ object Cards {
       (role: Role) => {
         log("Morocco and Tunisia are now independent.")
         log("FLN may now enter them, Rally and Extort there, etc.")
-        log("Set the Border Zone Status Marker to zero.")
+        log("Set the Border Zone Status Marker to zero.", Color.GameMarker)
       },
       (role: Role) => () // Single event
     )),

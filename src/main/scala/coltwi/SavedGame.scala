@@ -36,10 +36,10 @@ package coltwi
 import java.io.IOException
 import FUtil.Pathname
 import ColonialTwilight.{ GameState, GameParameters, SequenceOfPlay, Space, Pieces, Role, Action,
-                          SpaceType, Terrain, SupportValue, Resources, SOFTWARE_VERSION }
+                          SpaceType, Terrain, SupportValue, Resources, LogEntry, Color, SOFTWARE_VERSION }
 
 object SavedGame {
-  val CurrentFileVersion = 1
+  val CurrentFileVersion = 2
   
   def save(filepath: Pathname, gameState: GameState): Unit = {
     try {
@@ -91,6 +91,7 @@ object SavedGame {
         throw new IllegalArgumentException(s"Invalid save file - No game-state")
       
       asInt(top("file-version")) match {
+        case 2 => gameFromVersion2(asMap(top("game-state")))
         case 1 => gameFromVersion1(asMap(top("game-state")))
         case v => throw new IllegalArgumentException(s"Invalid save file version: $v")
       }
@@ -204,7 +205,22 @@ object SavedGame {
     )
   }
   
-  
+  private def logEntryToMap(entry: LogEntry): Map[String, Any] = 
+    Map(
+      "text" -> entry.text,
+      "color" -> entry.color.map(_.name).getOrElse(null)
+    )
+
+  private def logEntryFromMap(data: Map[String, Any]): LogEntry = {
+    val color = if (data("color") == null)
+      None
+    else
+      Some(Color.fromName(asString(data("color"))));
+
+    LogEntry(asString(data("text")), color)
+  }
+
+
   private def gameStateToMap(gameState: GameState): Map[String, Any] = {
     Map(
       "params"                  -> gameParametersToMap(gameState.params),
@@ -227,10 +243,38 @@ object SavedGame {
       "pivotalCardsPlayed"      -> gameState.pivotalCardsPlayed,
       "coupdEtatPlayedOnce"     -> gameState.coupdEtatPlayedOnce,
       "recallDeGaulleCancelled" -> gameState.recallDeGaulleCancelled,
-      "history"                 -> gameState.history
+      "showColor"               -> gameState.showColor,
+      "history"                 -> (gameState.history map logEntryToMap)
     )
   }
+
+  // Version 2 added colors for log entries
+  private def gameFromVersion2(data: Map[String, Any]): GameState = {
+    GameState(
+      gameParametersFromMap(asMap(data("params"))),
+      asInt(data("turn")),
+      asInt(data("numberOfPropCards")),
+      asList(data("spaces")) map (s => spaceFromMap(asMap(s))),
+      asInt(data("franceTrack")),
+      asInt(data("borderZoneTrack")),
+      asInt(data("commitment")),
+      Resources(asInt(data("gov_resources")), asInt(data("fln_resources"))),
+      piecesFromMap(asMap(data("outOfPlay"))),
+      piecesFromMap(asMap(data("casualties"))),
+      sequenceOfPlayFromMap(asMap(data("sequence"))),
+      asList(data("capabilities")) map (_.toString),
+      asList(data("momentum")) map (_.toString),
+      if (data("currentCard") == null) None else Some(asInt(data("currentCard"))),
+      if (data("previousCard") == null) None else Some(asInt(data("previousCard"))),
+      asInt(data("propCardsPlayed")),
+      (asList(data("pivotalCardsPlayed")) map asInt).toSet,
+      asBoolean(data("coupdEtatPlayedOnce")),
+      asBoolean(data("recallDeGaulleCancelled")),
+      asBoolean(data("showColor")),
+      asList(data("history")).map(e => logEntryFromMap(asMap(e))).toVector
+    )
   
+ }    
   //  Version 1 game state is in the same foremat as version zero
   //  (It was just down one level from the top meta dat)
   private def gameFromVersion1(data: Map[String, Any]): GameState = gameFromVersionZero(data)
@@ -264,9 +308,10 @@ object SavedGame {
       (asList(data("pivotalCardsPlayed")) map asInt).toSet,
       asBoolean(data("coupdEtatPlayedOnce")),
       asBoolean(data("recallDeGaulleCancelled")),
-      (asList(data("history")) map (_.toString)).toVector
+      true, // showColor so new turns will be colorized
+      // Must add None for color entry
+      asList(data("history")).map(s => LogEntry(s.toString, None)).toVector
     )
-  
  }  
 }
 
