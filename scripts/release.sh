@@ -5,7 +5,7 @@
 # And finally zip up the results and copy the zip file to Dropbox
 #
 # usage:
-# ./package.sh [<version>]
+# ./reloease.sh [<version>]
 
 shopt -s extglob
 
@@ -76,7 +76,7 @@ commit_release() {
   local version=$1
 
   git add  --update .
-  git ci   -m"Update version number to $version"
+  git ci   -m"build: update version number to $version"
   git tag  -m"Release v$version" "v$version"
   git push --tags origin master
   gh release create --generate-notes --title "Version $version" "v$version"
