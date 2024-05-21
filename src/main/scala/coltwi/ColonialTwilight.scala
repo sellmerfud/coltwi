@@ -47,7 +47,7 @@ import FUtil.Pathname
 
 object ColonialTwilight {
   
-  val SOFTWARE_VERSION = "2.13"
+  val SOFTWARE_VERSION = "2.14"
   val INTEGER = """(\d+)""".r
   
   def dieRoll = if (true) nextInt(6) + 1
