@@ -15,8 +15,4 @@
 ## This is important so that all of our relative path references work correctly.
 cd `dirname $0`
 
-CLASSPATH=lib/coltwi_2.13-2.13.jar:\
-lib/scala-library-2.13.10.jar:\
-lib/scala-parser-combinators_2.13-2.1.1.jar
-
-java -cp "$CLASSPATH"  coltwi.ColonialTwilight "$@"
+java -cp "lib/loader.jar" loader.Loader "$@"
