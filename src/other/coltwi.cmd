@@ -17,6 +17,6 @@ rem Set the current working directory to the directory where this script is runn
 rem This is important so that all of our relative path references work correctly.
 
 pushd %~dp0
-java -cp lib\loader.jar loader.Loader %*
+java -cp lib\loader.jar -Dloader.targetClass=coltwi.ColonialTwilight loader.Loader %*
 popd
 EndLocal

@@ -15,4 +15,4 @@
 ## This is important so that all of our relative path references work correctly.
 cd `dirname $0`
 
-java -cp "lib/loader.jar" loader.Loader "$@"
+java -cp "lib/loader.jar" -D"loader.targetClass=coltwi.ColonialTwilight" loader.Loader "$@"
