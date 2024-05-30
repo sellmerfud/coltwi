@@ -524,15 +524,21 @@ object Human {
     override def toString() = "Assault"
 
     def flnLosses(sp: Space): Pieces = {
-      val totalCubes = if (sp.isCity || sp.isBorderSector || momentumInPlay(MoChallePlanGov))
-        sp.totalCubes else sp.totalTroops
-      val maxLosses  = if (sp.isMountains && !capabilityInPlay(CapNapalm)) totalCubes / 2 else totalCubes
-      val numGuerrillas = sp.activeGuerrillas min maxLosses
-      val numBases = if (sp.flnBases == 0 || sp.hiddenGuerrillas > 0 || sp.activeGuerrillas >= maxLosses)
+      var totalCubes = if (sp.isCity || sp.isBorderSector || momentumInPlay(MoChallePlanGov))
+        sp.totalCubes
+      else
+        sp.totalTroops
+      val cubesToKillGuerrilla = if (sp.isMountains && !capabilityInPlay(CapNapalm)) 2 else 1
+      // Napalm does not affect bases
+      val cubesToKillBase = if (sp.isMountains) 2 else 1
+      val guerrillaLosses = sp.activeGuerrillas min (totalCubes / cubesToKillGuerrilla)
+      val cubesRemaining = totalCubes - (guerrillaLosses * cubesToKillGuerrilla);
+      val baseLosses = if (sp.hiddenGuerrillas > 0)
         0
       else
-        (maxLosses - numGuerrillas) min sp.flnBases
-      Pieces(activeGuerrillas = numGuerrillas, flnBases = numBases)
+        sp.flnBases min (cubesRemaining / cubesToKillBase)
+
+      Pieces(activeGuerrillas = guerrillaLosses, flnBases = baseLosses)
     }
     val assaultFilter = (sp: Space) => flnLosses(sp).total > 0 ||
                                         (momentumInPlay(MoPeaceOfTheBrave) && sp.totalGuerrillas > 0)
@@ -573,6 +579,8 @@ object Human {
               if (!params.free)
                 decreaseResources(Gov, costPerSpace)
               checkPeaceOfTheBrave(spaceName)
+              if (game.getSpace(spaceName).isMountains && capabilityInPlay(CapNapalm))
+                log(s"Each troop removes two active guerrillas in Mountains [$CapNapalm]", Color.Event)
               removeLosses(spaceName, flnLosses(game.getSpace(spaceName)))
               assaultSpaces += spaceName
             }
