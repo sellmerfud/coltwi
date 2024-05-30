@@ -126,7 +126,7 @@ object Bot {
   // - Place an FLN base
   // - Increase FLN resources
   def eventIsEffective(beforeState: GameState, afterState: GameState): Boolean = (
-    beforeState.govScore               > afterState.govScore               ||
+    beforeState.govPoints               > afterState.govPoints               ||
     beforeState.resources(Gov)         > afterState.resources(Gov)         ||
     beforeState.franceTrack            < afterState.franceTrack            ||
     beforeState.totalOnMap(_.flnBases) < afterState.totalOnMap(_.flnBases) ||
@@ -566,7 +566,7 @@ object Bot {
         }
       
       (eventResult, terrorResult) match {
-        case (Some((eventState, ts, _)), Some((terrorState, _, _))) if eventState.govScore <= terrorState.govScore && willPlayEvent(eventState) =>
+        case (Some((eventState, ts, _)), Some((terrorState, _, _))) if eventState.govPoints <= terrorState.govPoints && willPlayEvent(eventState) =>
           showLogEntries(game, eventState)
           turnState = ts
           game = eventState
@@ -576,7 +576,7 @@ object Bot {
           turnState = ts
           game = eventState
           Right(Event)
-        case (_, Some((terrorState, ts, action))) if terrorState.govScore < game.govScore || 
+        case (_, Some((terrorState, ts, action))) if terrorState.govPoints < game.govPoints || 
                                                 terrorState.totalOnMap(_.terror) > game.totalOnMap(_.terror) =>
           showLogEntries(game, terrorState)
           turnState = ts
@@ -956,9 +956,10 @@ object Bot {
                     decreaseResources(Fln, 1)
                   val numActive = 2 min sp.activeGuerrillas
                   val numHidden = 2 - numActive
-                  removeToAvailable(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden), logControl = false)
-                  placePieces(sp.name, Pieces(flnBases = 1), logControl = false)
-                  logControlChange(sp, game.getSpace(sp.name))
+                  loggingControlChanges {
+                    removeToAvailable(sp.name, Pieces(activeGuerrillas = numActive, hiddenGuerrillas = numHidden))
+                    placePieces(sp.name, Pieces(flnBases = 1))
+                  }
                   rallySpaces += sp.name
                   pause()
                 }
