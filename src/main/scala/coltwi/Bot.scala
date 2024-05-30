@@ -302,12 +302,12 @@ object Bot {
       ExecOpOnly
   }
   
-  def hiddenNeeded(sp: Space) = if (capabilityInPlay(CapAmateurBomber) && sp.isCity) 2 else 1
+  def hiddenNeededForTerror(sp: Space) = if (capabilityInPlay(CapAmateurBomber) && sp.isCity) 2 else 1
     
   def terrorCandidates(offLimits: Set[String]) = game.algerianSpaces filter { sp =>
     !offLimits(sp.name) &&
     sp.population > 0   &&
-    hasSafeHiddenGuerrillas(sp, hiddenNeeded(sp)) && 
+    hasSafeHiddenGuerrillas(sp, hiddenNeededForTerror(sp)) && 
     ((sp.isSupport && !momentumInPlay(MoIntimidation)) || 
      (game.isFinalCampaign && sp.isNeutral && sp.terror == 0 && sp.canTrain))
   }  
@@ -602,7 +602,7 @@ object Bot {
         val isFree = turnState.freeOperation || (target.isCity && capabilityInPlay(CapEffectiveBomber))
         
         if (!isFree && game.resources(Fln) == 0) {
-          val protectedGs = List((target.name -> hiddenNeeded(target)))
+          val protectedGs = List((target.name -> hiddenNeededForTerror(target)))
           tryExtort(protectedGs)
         }
       
@@ -611,11 +611,14 @@ object Bot {
           terrorized += target.name
           log()
           log(s"$Fln executes Terror operation: ${target.nameAndZone}")
+          if (target.isCity && capabilityInPlay(CapAmateurBomber))
+            log(s"Terror in city requires 2 underground guerrillas: [$CapEffectiveBomber]", Color.Event)
+
           if (isFree)
-            log(s"Terror is free in city because '${CapEffectiveBomber}' is in play", Color.Event)
+            log(s"Terror is free in city: [$CapEffectiveBomber]'", Color.Event)
           else
             decreaseResources(Fln, 1)
-          activateHiddenGuerrillas(target.name, hiddenNeeded(target))
+          activateHiddenGuerrillas(target.name, hiddenNeededForTerror(target))
           if (target.terror == 0 && game.terrorMarkersAvailable > 0)
             addTerror(target.name, 1)
           if (!momentumInPlay(MoIntimidation))
@@ -678,7 +681,9 @@ object Bot {
         log(s"$Fln executes Attack operation with ambush: ${sp.nameAndZone}")
         if (!turnState.freeOperation)
           decreaseResources(Fln, 1)
-        if (!capabilityInPlay(CapFlnCommandos))
+        if (capabilityInPlay(CapFlnCommandos))
+          log(s"Ambush does not activate the guerrlla: [$CapFlnCommandos]", Color.Event)
+        else
           activateHiddenGuerrillas(name, 1)
         removeLosses(name, attackLosses(sp.pieces, ambush))
         pause()
@@ -1383,6 +1388,8 @@ object Bot {
                 log()
                 log(separator())
                 log(s"$Fln chooses: March")
+                if (capabilityInPlay(CapDeadZones))
+                  log(s"Guerrillas may not march again if in the same Wilaya: [$CapDeadZones]", Color.Event)
               }
             
               if (game.resources(Fln) < cost && !turnState.freeOperation) {
@@ -1825,7 +1832,7 @@ object Bot {
     log(separator())
     
     if (capabilityInPlay(CapXWilayaCoord)) {
-      log(s"Guerrillas can redeploy across Wilaya borders: $CapXWilayaCoord")
+      log(s"Guerrillas can redeploy across Wilaya borders: [$CapXWilayaCoord]", Color.Event)
       redeployGuerrillas(getSources(game.algerianSpaces), getDests(game.algerianSpaces))
     }
     else

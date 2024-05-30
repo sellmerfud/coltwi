@@ -256,7 +256,10 @@ object Human {
       }
 
       if (candidateSpaces.nonEmpty && game.resources(Gov) > 1) {
-        println(s"\nYou may pacify in up to ${maxSpaces} of the training spaces")
+        if (capabilityInPlay(CapGovSaS) && maxSpaces == 2)
+          displayLine(s"\nYou may Pacify in up to 2 of the training spaces: [$CapGovSaS]", Color.Event)
+        else
+          displayLine(s"\nYou may Pacify in up to one of the training spaces")
         nextPacify(0, candidateSpaces)
       }
     }
@@ -367,6 +370,8 @@ object Human {
         val name = if (candidates.size == 1) candidates.head
                    else askSpace(s"Choose space to activate guerrillas: ", candidates, allowAbort = false)
         val sp = game.getSpace(name)
+        if (capabilityInPlay(CapGovCommandos) && sp.isMountains && sp.algerianPolice > 0)
+          log(s"Each Algerian police in mountain activates 1 guerrilla: [$CapGovCommandos]", Color.Event)
         activateHiddenGuerrillas(name, guerrillasActivated(sp))
       }
     }
@@ -440,6 +445,9 @@ object Human {
 
           case "activate" =>
             askSpaceAllowNone(s"\nChoose space to activate guerrillas: ", activateSpaces.sorted) foreach { spaceName =>
+              val sp = game.getSpace(spaceName)
+              if (capabilityInPlay(CapGovCommandos) && sp.isMountains && sp.algerianCubes > 0)
+                log(s"Each Algerian cube in mountain activates 1 guerrilla: [$CapGovCommandos]", Color.Event)
               activateHiddenGuerrillas(spaceName, guerrillasActivated(game.getSpace(spaceName)))
               activatedSpaces += spaceName
             }
@@ -601,6 +609,12 @@ object Human {
         }
       }
 
+      if (capabilityInPlay(CapFlnSaS))
+        displayLine(s"\nAssault my target only one space per card: [$CapFlnSaS]", Color.Event)
+
+      if (capabilityInPlay(CapScorch))
+        displayLine(s"\nEach Assault space cost 3 resources: [$CapScorch]", Color.Event)
+
       nextChoice()
 
       if (assaultSpaces.nonEmpty && capabilityInPlay(CapRevenge) && game.guerrillasAvailable > 0) {
@@ -616,7 +630,7 @@ object Human {
           new Bot.HighestPriority[Space]("Highest population", _.population))
 
         val sp = Bot.topPriority(candidates, priorities)
-        log(s"Fln places a guerrilla in one assault spaces due to capability: $CapRevenge", Color.Event)
+        log(s"Fln places a guerrilla in one assault space: [$CapRevenge]", Color.Event)
         placePieces(sp.name, Pieces(hiddenGuerrillas = 1))
       }
 
@@ -871,14 +885,15 @@ object Human {
         log()
         log(s"$Gov executes a Neutralize special ability")
         if (capabilityInPlay(CapOverkill))
-          log("The Overkill capability is in play: Up to four total pieces may be removed", Color.Event)
+          log(s"Up to four total pieces may be removed: [$CapOverkill]", Color.Event)
         else
           log("Up to two total pieces may be removed")
 
         if (capabilityInPlay(CapTorture)) {
-          log("The Torture capability is in play", Color.Event)
+          
+          log(s"-1 Commitment for each Neutralize executed: [$CapTorture]", Color.Event)
           decreaseCommitment(1)
-          log("One extra piece will be removed from each space (may be underground)", Color.Event)
+          log(s"One extra piece will be removed from each space (may be underground): [$CapTorture]", Color.Event)
         }
 
         val totalRemoval = if (capabilityInPlay(CapOverkill)) 4 else 2 // Excluding overkill
