@@ -50,144 +50,42 @@ set_version() {
   local version=$1
 
   ruby -p -i -e 'gsub(/(version\s*:=\s*)("\d+\.\d+")/, "\\1\"'"$version"'\"")' build.sbt
-  ruby -p -i -e 'gsub(/'"$jarfile_prefix"'_2.13-(\d+\.\d+)\.jar/, "'"$jarfile_prefix"'_2.13-'"$version"'.jar")' "src/other/$program_name" "src/other/$program_name.cmd"
-  ruby -p -i -e 'gsub(/(val\s+SOFTWARE_VERSION\s*=\s*)("\d+\.\d+")/, "\\1\"'"$version"'\"")' "$main_class"
   printf "Version set to %s\n" "$version"
 }
 
-create_package() {
+zipfile_name() {
   local version=$1
-
-  PKG=$program_name-$version
-  if [ -d "target/$PKG" ]; then
-    find "target/$PKG" -name .DS_Store -exec rm {} \+
-    rm -f "target/$PKG.zip"
-    rm -fr "target/$PKG/games"  # Remove any games created during testing.
-    (cd target; zip -rq "$PKG.zip" "$PKG")
-  else
-    printf "Target directory: '%s' does not exist\n" "target/$PKG"
-    exit 1
-  fi
+  printf "%s" "$program_name-${version}.zip"
 }
 
 # Add the files that we have modified to the git index,
 # commit the release, and push it to Github
 commit_release() {
   local version=$1
+  local version_label="v$version"
+  local local_zip_file_path
+
+  local_zip_file_path="target/$(zipfile_name "$version")"
 
   git add  --update .
   git ci   -m"build: update version number to $version"
-  git tag  -m"Release v$version" "v$version"
+  git tag  -m"Release $version_label" "$version_label"
   git push --tags origin master
-  gh release create --generate-notes --title "Version $version" "v$version"
-}
-
-
-
-# Get a short term access token for the dropbox api using our refresh token.
-# We must do this because the access tokens are shot term and will expire
-# in about 4 hours.
-get_access_token() {
-  local refresh_token="$(head -n1 ~/.dropbox/game_bots_refresh_token)"
-  local client_id="$(head -n1 ~/.dropbox/game_bots_client_id)"
-  local response=/tmp/access_token_response.$$
-  local result=1
-
-  curl -s https://api.dropbox.com/oauth2/token \
-      -d grant_type=refresh_token \
-      -d refresh_token="$refresh_token" \
-      -d client_id="$client_id" > $response
-
-  if grep -F --quiet '"error":' $response; then
-    printf "Error getting access token\n" >&2
-    jq . $response >&2
-  else
-    jq --raw-output .access_token $response
-    result=0
-  fi
-
-  rm -f $response
-  return $result
-}
-
-# Get the sharable url for the zip file and echo it to stdout
-get_zipfile_url() {
-  local version="$1"
-  local dropbox_zip_file_path="/$program_name/$program_name-${version}.zip"
-  local access_token=""
-  local response=/tmp/get_zipfile_url_response.$$
-  local result=1
-
-  # NOTE:  We cannot assign this in the local variable declaration
-  #        because we would lose the returned error code and would
-  #        get the success error code from the 'local' function.
-  access_token="$(get_access_token)"
-
-  # If the url already exists then an error object is returned with the url buried
-  # several layers down.  Otherwise it is in the field .url at top level.
-
-  curl -s -X POST https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings \
-      --header "Authorization: Bearer $access_token" \
-      --header "Content-Type: application/json" \
-      --data "{\"path\":\"${dropbox_zip_file_path}\"}" > $response
-
-  if grep -F --quiet '"shared_link_already_exists":' $response; then
-    jq '.error.shared_link_already_exists.metadata.url' $response | sd '^"|"$' ''
-    result=0
-  elif grep -F --quiet '"error":' $response; then
-    printf "Error getting zipfile url\n" >&2
-    jq . $response >&2
-  else
-    jq --raw-output '.url' $response
-    result=0
-  fi
-
-  rm -f $response
-  return $result
-}
-
-upload_zipfile() {
-  local version="$1"
-  local local_zip_file_path="target/$program_name-${version}.zip"
-  local dropbox_zip_file_path="/$program_name/$program_name-${version}.zip"
-  local access_token=""
-  local response=/tmp/upload_response.$$
-  local result=1
-
-  # NOTE:  We cannot assign this in the local variable declaration
-  #        because we would lose the returned error code and would
-  #        get the success error code from the 'local' function.
-  access_token="$(get_access_token)"
-
-  curl -s -X POST https://content.dropboxapi.com/2/files/upload \
-      --header "Authorization: Bearer $access_token" \
-      --header "Dropbox-API-Arg: {\"autorename\":false,\"mode\":\"overwrite\",\"mute\":false,\"path\":\"${dropbox_zip_file_path}\",\"strict_conflict\":false}" \
-      --header "Content-Type: application/octet-stream" \
-      --data-binary @"$local_zip_file_path"  >$response
-
-  if grep -F --quiet '"error":' $response; then
-    printf "Error uploading zip file\n" >&2
-    jq . $response >&2
-  else
-    printf "%s copied to Dropbox\n" "$local_zip_file_path"
-    result=0
-  fi
-
-  rm -f $response
-  return $result
+  gh release create --generate-notes --title "Version $version" "$version_label"
+  # Upload the zip file to the release assests
+  gh release upload "$version_label" "$local_zip_file_path"
 }
 
 # Update the README.md file with the new
 # version number and dropbox url
 update_readme() {
   local version="$1"
-  local zip_file_url=""
+  local zip_file_url
 
-  zip_file_url="$(get_zipfile_url "$version")"
+  zip_file_url="https://github.com/sellmerfud/${repo_name}/releases/download/v${version}/$(zipfile_name "$version")"
 
   ruby -p -i -e 'gsub(/\[Version\s*\d+\.\d+\]/, "[Version '"$version"']")' \
              -e 'gsub(/^\[1\]:.*$/, "[1]: '"$zip_file_url"'")' README.md
-
 }
 
 # Start of main script
@@ -239,36 +137,8 @@ esac
 ## This is important because sbt' must be run from the top level directory
 cd "$(dirname "$0")/.."
 
-ID_FILE="$(dirname "$0")/local_package_vars.sh"
-[[ -f "$ID_FILE" ]] || {
-  printf "File not found: %s\n" "$ID_FILE"
-  exit 1
-}
-
-# Sets the program_name and main_class variables
-# shellcheck source=/dev/null
-source "$ID_FILE"
-
-
-[[ -z ${program_name:+x} ]] && {
-  printf "variable 'program_name' is not set in %s\n" "$ID_FILE"
-  exit 1
-}
-
-[[ -z ${main_class:+x} ]] && {
-  printf "variable 'main_class' is not set in %s\n" "$ID_FILE"
-  exit 1
-}
-
-[[ -z ${jarfile_prefix:+x} ]] && {
-  printf "variable 'jarfile_prefix' is not set in %s\n" "$ID_FILE"
-  exit 1
-}
-
-
-
-# Make sure the main_class includes the .scala extentsion
-main_class="${main_class%.scala}.scala"
+repo_name=coltwi
+program_name=coltwi
 
 # Make sure we are on the master branch
 if ! branch=$(git branch --show-current 2>/dev/null); then
@@ -324,8 +194,6 @@ trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
 trap 'printf "\"${last_command}\" command failed with exit code $?.\n"' EXIT
 
 sbt stage
-create_package "$NEW_VERSION"
-upload_zipfile "$NEW_VERSION"
 update_readme  "$NEW_VERSION"
 if [[ $DO_COMMIT == yes ]]; then
   commit_release "$NEW_VERSION"
