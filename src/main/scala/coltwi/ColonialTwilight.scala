@@ -108,19 +108,48 @@ object ColonialTwilight {
     val name: String,
     val dual: Boolean,
     val markedForFLN: Boolean,  // Play the event if it is effective (no die < 5) necessary
-    val flnAlwaysPlay: Boolean, // Capabilities and some Fln marked events are always played even if not immediately effective
-    val botEventSelection: BotEventSelector,
-    val executeUnshaded: CardEvent,
-    val executeShaded: CardEvent) {
+    val flnAlwaysPlay: Boolean) { // Capabilities and some Fln marked events are always played even if not immediately effective
 
     def numAndName = s"#$number $name"
     override def toString() = numAndName
+
+    def botEventSelection(): EventSelection = NoEvent
+    def executeUnshaded(role: Role): Unit = ()
+    def executeShaded(role: Role): Unit = ()
   }
 
-  // Sort by card number
-  implicit val CardOrdering: Ordering[Card] = new Ordering[Card] {
-    def compare(x: Card, y: Card) = x.number compare y.number
+  object Card {
+    val Single     = false
+    val Dual       = true
+    val FlnMarked  = true
+    val AlwaysPlay = true  // Capabilities and some FLN marked events.
+
+      // Sort by card number
+    implicit val CardOrdering: Ordering[Card] = new Ordering[Card] {
+      def compare(x: Card, y: Card) = x.number compare y.number
+    }
+
+    // True if the space or any adjacent space contains an FLN base
+    val flnBaseAdjacent = (sp: Space) => {
+      ((getAdjacent(sp.name) map game.getSpace) + sp) exists (_.flnBases > 0)
+    }
+
+    val OppositionPriorities = List(
+      new Bot.BooleanPriority[Space]("Is at support",      _.isSupport),
+      new Bot.HighestPriority[Space]("Highest population", _.population),
+      new Bot.BooleanPriority[Space]("Gov cannot train",  !_.canTrain))
+
+    def spaceCandidates(criteria: Space => Boolean): List[String] =
+      spaceNames(game.spaces filter criteria).sorted
+
+    def algerianCandidates(criteria: Space => Boolean): List[String] =
+      spaceNames(game.algerianSpaces filter criteria).sorted
+
+    def wilayaCandidates(wilaya: String)(criteria: Space => Boolean): List[String] =
+      spaceNames(game.wilayaSpaces(wilaya) filter criteria).sorted
+
   }
+
   
   val PivotalMoroccoTunisiaIndepdent = 61
   val PivotalSuezCrisis              = 62
@@ -130,7 +159,27 @@ object ColonialTwilight {
   val PivotalCoupdEtat               = 66
   
   object deck {
-    val deckMap = Cards.deckMap
+    import coltwi.cards._
+    private def entry(card: Card) = (card.number -> card)
+
+    val deckMap: Map[Int, Card] = Map(
+      entry(Card_001), entry(Card_002), entry(Card_003), entry(Card_004), entry(Card_005),
+      entry(Card_006), entry(Card_007), entry(Card_008), entry(Card_009), entry(Card_010),
+      entry(Card_011), entry(Card_012), entry(Card_013), entry(Card_014), entry(Card_015),
+      entry(Card_016), entry(Card_017), entry(Card_018), entry(Card_019), entry(Card_020),
+      entry(Card_021), entry(Card_022), entry(Card_023), entry(Card_024), entry(Card_025),
+      entry(Card_026), entry(Card_027), entry(Card_028), entry(Card_029), entry(Card_030),
+      entry(Card_031), entry(Card_032), entry(Card_033), entry(Card_034), entry(Card_035),
+      entry(Card_036), entry(Card_037), entry(Card_038), entry(Card_039), entry(Card_040),
+      entry(Card_041), entry(Card_042), entry(Card_043), entry(Card_044), entry(Card_045),
+      entry(Card_046), entry(Card_047), entry(Card_048), entry(Card_049), entry(Card_050),
+      entry(Card_051), entry(Card_052), entry(Card_053), entry(Card_054), entry(Card_055),
+      entry(Card_056), entry(Card_057), entry(Card_058), entry(Card_059), entry(Card_060),
+      entry(Card_061), entry(Card_062), entry(Card_063), entry(Card_064), entry(Card_065),
+      entry(Card_066), entry(Card_067), entry(Card_068), entry(Card_069), entry(Card_070),
+      entry(Card_071),
+    )
+
     val PropCards       = Range.inclusive(67, 71).toSet
     val GovPivotalCards = Set(PivotalMobilization, PivotalRecallDeGaulle, PivotalCoupdEtat)
     val FlnPivotalCards = Set(PivotalMoroccoTunisiaIndepdent, PivotalSuezCrisis, PivotalOAS)
